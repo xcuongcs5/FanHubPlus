@@ -1,0 +1,13 @@
+{
+  "name": "fanhub-media-streaming-service",
+  "version": "1.0.0",
+  "description": "FanHub Plus - Media Streaming Service (HTTP 206 Byte-Range Audio/Video Streaming)",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "jest"
+  },
+  "keywords": ["streaming", "media", "video", "audio", "range-request"],
+  "license": "ISC"
+}

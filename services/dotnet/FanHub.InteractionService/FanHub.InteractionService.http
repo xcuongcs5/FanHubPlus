@@ -1,0 +1,6 @@
+@FanHub.InteractionService_HostAddress = http://localhost:5051
+
+GET {{FanHub.InteractionService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

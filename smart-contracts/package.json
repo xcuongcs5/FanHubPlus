@@ -1,0 +1,12 @@
+{
+  "name": "fanhub-smart-contracts",
+  "version": "1.0.0",
+  "description": "FanHub Plus - NFT Event Ticket Smart Contracts (ERC-721 / ERC-1155 on Polygon L2)",
+  "scripts": {
+    "compile": "npx hardhat compile",
+    "test": "npx hardhat test",
+    "deploy:testnet": "npx hardhat run scripts/deploy.js --network polygon_amoy"
+  },
+  "keywords": ["nft", "erc721", "erc1155", "polygon", "ticketing"],
+  "license": "ISC"
+}

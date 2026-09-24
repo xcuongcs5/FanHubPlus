@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  postgres-identity:
+    image: postgres:16-alpine
+    container_name: fanhub-postgres-identity
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: fanhub_identity
+      POSTGRES_USER: ${POSTGRES_USER:-fanhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanhub_secret}
+    volumes:
+      - postgres_identity_data:/var/lib/postgresql/data
+
+  postgres-booking:
+    image: postgres:16-alpine
+    container_name: fanhub-postgres-booking
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: fanhub_booking
+      POSTGRES_USER: ${POSTGRES_USER:-fanhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanhub_secret}
+    volumes:
+      - postgres_booking_data:/var/lib/postgresql/data
+
+  mysql-cms:
+    image: mysql:8.0
+    container_name: fanhub-mysql-cms
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: fanhub_cms
+      MYSQL_USER: ${MYSQL_USER:-fanhub}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-fanhub_secret}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret}
+    volumes:
+      - mysql_cms_data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: fanhub-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-fanhub_redis}
+    volumes:
+      - redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: fanhub-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-fanhub}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-fanhub_rabbit}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  postgres_identity_data:
+  postgres_booking_data:
+  mysql_cms_data:
+  redis_data:
+  rabbitmq_data:
