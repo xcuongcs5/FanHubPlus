@@ -10,3 +10,4 @@ C:\Users\xcuon\OneDrive\Desktop\New folder\FanHubPlus\services\dotnet\shared\Fan
 C:\Users\xcuon\OneDrive\Desktop\New folder\FanHubPlus\services\dotnet\shared\FanHub.Shared.Common\obj\Debug\net10.0\refint\FanHub.Shared.Common.dll
 C:\Users\xcuon\OneDrive\Desktop\New folder\FanHubPlus\services\dotnet\shared\FanHub.Shared.Common\obj\Debug\net10.0\FanHub.Shared.Common.pdb
 C:\Users\xcuon\OneDrive\Desktop\New folder\FanHubPlus\services\dotnet\shared\FanHub.Shared.Common\obj\Debug\net10.0\ref\FanHub.Shared.Common.dll
+C:\Users\xcuon\OneDrive\Desktop\New folder\FanHubPlus\services\dotnet\shared\FanHub.Shared.Common\obj\Debug\net10.0\FanHub.Shared.Common.csproj.AssemblyReference.cache

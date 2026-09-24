@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("FanHub.IdentityService")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7b38a0858cc41909f9169106e5864a6a6f0e3bab")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+351ee3c3b181e2e7f519e63579b4032d6972a58a")]
 [assembly: System.Reflection.AssemblyProductAttribute("FanHub.IdentityService")]
 [assembly: System.Reflection.AssemblyTitleAttribute("FanHub.IdentityService")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
