@@ -1,0 +1,4 @@
+# Migration checksums and Linux entrypoints must survive Windows checkout unchanged.
+database/**/*.sql text eol=lf
+docker/chinhduc/scripts/*.sh text eol=lf
+docker/chinhduc/*.yml text eol=lf
