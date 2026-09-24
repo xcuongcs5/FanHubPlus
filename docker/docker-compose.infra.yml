@@ -1,29 +1,17 @@
 version: '3.8'
 
 services:
-  postgres-identity:
-    image: postgres:16-alpine
-    container_name: fanhub-postgres-identity
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fanhub-sqlserver
+    user: "0:0"
     ports:
-      - "5432:5432"
+      - "14333:1433"
     environment:
-      POSTGRES_DB: fanhub_identity
-      POSTGRES_USER: ${POSTGRES_USER:-fanhub}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanhub_secret}
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: "FanHubPlus@2026!"
     volumes:
-      - postgres_identity_data:/var/lib/postgresql/data
-
-  postgres-booking:
-    image: postgres:16-alpine
-    container_name: fanhub-postgres-booking
-    ports:
-      - "5433:5432"
-    environment:
-      POSTGRES_DB: fanhub_booking
-      POSTGRES_USER: ${POSTGRES_USER:-fanhub}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fanhub_secret}
-    volumes:
-      - postgres_booking_data:/var/lib/postgresql/data
+      - sqlserver_data:/var/opt/mssql/data
 
   mysql-cms:
     image: mysql:8.0
@@ -42,7 +30,7 @@ services:
     image: redis:7-alpine
     container_name: fanhub-redis
     ports:
-      - "6379:6379"
+      - "6370:6379"
     command: redis-server --requirepass ${REDIS_PASSWORD:-fanhub_redis}
     volumes:
       - redis_data:/data
@@ -60,8 +48,7 @@ services:
       - rabbitmq_data:/var/lib/rabbitmq
 
 volumes:
-  postgres_identity_data:
-  postgres_booking_data:
+  sqlserver_data:
   mysql_cms_data:
   redis_data:
   rabbitmq_data:
