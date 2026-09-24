@@ -1,6 +1,1 @@
-namespace FanHub.Shared.Common;
-
-public class Class1
-{
-
-}
+// The real code is in the subfolders.
