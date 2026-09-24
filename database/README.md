@@ -1,6 +1,6 @@
 # Database cho Chính Đức — task 21–54
 
-Phạm vi giai đoạn này là schema, migration SQL Server, Docker và kiểm thử database. Chưa triển khai API, EF Core DbContext, RabbitMQ consumer/publisher, cổng thanh toán hay push notification. Schema là nền cho các phần đó, không có nghĩa 34 API đã hoàn thành.
+Thư mục này quản lý schema, migration SQL Server, Docker và kiểm thử database. EventService (task 21–32) đã có API, EF Core mapping và RabbitMQ inbox/outbox; xem [hướng dẫn EventService](../services/dotnet/FanHub.EventService/README.md). Booking, Payment và Notification vẫn ở giai đoạn nền database, chưa có API nghiệp vụ. Chưa tích hợp cổng thanh toán hoặc push notification.
 
 ## Phân chia database
 
@@ -59,7 +59,7 @@ Các port có thể đổi trong `.env`. SQL/RabbitMQ/Redis chỉ bind loopback.
 
 Trong SSMS: chọn **SQL Server Authentication**, database tương ứng và tài khoản ứng dụng trong bảng đầu. Lấy mật khẩu từ biến `EVENT_DB_PASSWORD`, `BOOKING_DB_PASSWORD`, `PAYMENT_DB_PASSWORD`, `NOTIFICATION_DB_PASSWORD` trong `.env`; bật **Trust server certificate** cho môi trường Docker local.
 
-Ví dụ cấu hình **cho giai đoạn API**, chưa được Program.cs hiện tại sử dụng:
+Connection string theo service (EventDb đã được EventService sử dụng, các key còn lại dành cho giai đoạn tiếp theo):
 
 ```text
 ConnectionStrings__EventDb=Server=localhost,14334;Database=fanhub_event;User Id=fanhub_event_app;Password=<EVENT_DB_PASSWORD>;Encrypt=True;TrustServerCertificate=True
@@ -75,6 +75,7 @@ Khi service chạy cùng network Docker, đổi host thành `sqlserver,1433`. V�
 - `001_initial.sql`: schema nghiệp vụ riêng của từng service.
 - `002_messaging.sql`: cùng định nghĩa kỹ thuật nhưng tạo độc lập trong từng database.
 - `003_...sql`: các ràng buộc bổ sung của Booking và Payment.
+- `004_review_request.sql`: Event lưu ID lần gửi duyệt tại EVENT/EVENT_REVIEW để chặn kết quả cũ.
 - Thêm file mới với số tăng dần, duy nhất trong tập service + common, ví dụ `004_add_index.sql`. Script SQL không chứa `GO`, `USE`, `COMMIT`, `ROLLBACK` hoặc các chỉ thị sqlcmd; runner bọc transaction và thực thi một batch.
 - Migration được khóa bằng `sp_getapplock`, lưu SHA-256 và commit cùng DDL. Chạy lại bỏ qua phiên bản đã áp dụng. Nếu nội dung file đã áp dụng bị sửa, runner dừng. `.gitattributes` giữ LF để checksum không đổi khi checkout Windows/Linux.
 - Tài khoản ứng dụng không có quyền DDL, không ghi `__schema_migrations`, không truy cập database service khác. `WALLET_LEDGER` chỉ cho ứng dụng SELECT/INSERT; điều chỉnh tiền bằng entry nghiệp vụ bổ sung, không sửa lịch sử.

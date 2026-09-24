@@ -2,6 +2,8 @@
 
 Đây là quyết định thiết kế bổ sung để chuyển tài liệu phân công thành schema có thể triển khai. Các trạng thái, idempotency key và trường kỹ thuật dưới đây không phải hợp đồng API hoàn chỉnh đã được tài liệu nguồn quy định. Cần dùng chúng khi triển khai API và thống nhất event contract với đồng đội.
 
+Cập nhật triển khai: EventService đã có API 21–32, custom inbox/outbox worker, consumers và các record tích hợp C#. [README EventService](../services/dotnet/FanHub.EventService/README.md) mô tả chính xác trạng thái/HTTP contract đang chạy. Các đoạn mô tả Booking, Payment, Notification dưới đây vẫn là thiết kế cho giai đoạn tiếp theo.
+
 ## Ranh giới service
 
 ```mermaid
@@ -40,7 +42,7 @@ Không đọc bảng của service khác, không liên kết DbContext chéo ser
 | Blockchain | `TicketMinted`, `TicketTransferred`, các kết quả thất bại | Booking: ticket ID, NFT token, tx hash, operation ID |
 | Các service | Thông báo nghiệp vụ được chọn | Notification: source message ID, recipient ID, loại, payload tối thiểu |
 
-Các tên ngoài Identity là đề xuất, chưa có consumer hoặc binding RabbitMQ. Báo cáo nói `BookingCreated` dùng cho thanh toán; workbook task 71 dùng `order.paid` để mint NFT. Khi code cần map nhất quán: chỉ mint sau khi xác nhận trả tiền, không mint ngay khi giữ chỗ. Metadata QR/chữ ký thuộc service Blockchain; không lưu private key tại Booking.
+EventService hiện dùng các record có hậu tố `Event` trong Shared.Contracts và đã có consumer/binding tương ứng. Các sự kiện của Booking/Payment/Blockchain vẫn là đề xuất. Báo cáo nói `BookingCreated` dùng cho thanh toán; workbook task 71 dùng `order.paid` để mint NFT. Khi code cần map nhất quán: chỉ mint sau khi xác nhận trả tiền, không mint ngay khi giữ chỗ. Metadata QR/chữ ký thuộc service Blockchain; không lưu private key tại Booking.
 
 Mỗi message mới cần `message_id`, `event_type`, `schema_version`, `aggregate_id`, `aggregate_version`, `occurred_at`, `correlation_id`, `payload`. `aggregate_version` là số tăng theo bản ghi nguồn; có thể chuyển rowversion của nguồn sang số thứ tự trước khi phát, nhưng không so rowversion giữa hai database. Các record Identity hiện tại chỉ có CreatedAt/UpdatedAt/BannedAt; consumer dùng `source_updated_at`, giữ trạng thái ban khi nhận event cũ, và cần thống nhất version nếu timestamp trùng. Không tự ý thay contract của đồng đội ở giai đoạn này.
 
@@ -54,7 +56,7 @@ Các bảng inbox/outbox là schema tự quản lý; chúng **không tự tươn
 
 User ID lấy từ JWT đã xác thực. `EventOwner` hoặc `Admin` mới tạo/quản trị sự kiện, các thao tác quản trị phải kiểm tra `organizer_id`; staff chỉ thao tác đúng sự kiện được phân công. Mọi request tới danh sách cá nhân/vé/ví/thông báo đều lọc theo JWT subject. DB login tách service không thay thế phân quyền user trong API.
 
-Luồng sự kiện đề xuất: `Draft → PendingReview → Approved → Published`, hoặc `PendingReview → Rejected`; `Published → Cancelled/Completed`. Task 26 là gửi duyệt, không cho người tổ chức tự xuất bản ngay. Cột CHECK chỉ giới hạn tên trạng thái, code phải kiểm soát các bước chuyển và ghi `EVENT_REVIEW` khi nhận quyết định AI/Admin. DELETE task 27 là hủy nghiệp vụ, giữ lịch sử vé/giao dịch.
+Luồng EventService đang triển khai: `Draft → PendingReview → Published` khi nhận quyết định Approved, hoặc `PendingReview → Rejected`; `Published → Cancelled`. Giá trị Approved/Completed vẫn được schema hỗ trợ nhưng chưa có job tự chuyển Completed. Task 26 là gửi duyệt, không cho người tổ chức tự xuất bản ngay. Consumer kiểm tra `review_request_id` và ghi `EVENT_REVIEW` khi nhận quyết định AI/Admin. DELETE task 27 là hủy nghiệp vụ, giữ lịch sử vé/giao dịch.
 
 ### Booking và tồn vé
 

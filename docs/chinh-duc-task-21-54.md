@@ -11,11 +11,11 @@ Nguồn: `PhanCong_API_V3_Admin.xlsx`, sheet **Phân Công 70 APIs**, các hàng
 5. Báo cáo ghi .NET 8; các project hiện tại dùng `net10.0`. Giai đoạn database không đổi target framework hoặc code của đồng đội.
 6. Identity hiện đã dùng SQL Server/EF Core/MassTransit và Guid. Vì vậy schema mới dùng SQL Server `uniqueidentifier`, không lấy chuỗi mẫu `usr_xxx/evt_xxx` làm định dạng khóa vật lý.
 7. Docker cũ có connection PostgreSQL cho Identity trong khi code dùng `AuthDb` SQL Server; infra cũ còn MySQL CMS. Docker mới nằm riêng tại `docker/chinhduc`, tránh áp đặt thay đổi lên phần việc ngoài 21–54.
-8. Bốn service của Chính Đức chưa có DbContext/entity/controller nghiệp vụ; Event và Payment còn weatherforecast mẫu. Giai đoạn này không viết các API đó.
+8. Khi khảo sát ban đầu, bốn service của Chính Đức chưa có DbContext/entity/controller nghiệp vụ; Event và Payment còn weatherforecast mẫu. EventService hiện đã triển khai 21–32; Booking/Payment/Notification chưa có API nghiệp vụ.
 
 ## Ánh xạ 34 task sang schema
 
-Bảng dưới mô tả **database hỗ trợ** từng task, không đánh dấu API đã hoàn thành. Tất cả endpoint yêu cầu Bearer JWT theo workbook, trừ webhook 44–45 công khai ở tầng HTTP nhưng cần xác thực chữ ký provider.
+Bảng dưới ánh xạ **database hỗ trợ** từng task. Task 21–32 hiện đã có implementation và integration tests, xem [EventService](../services/dotnet/FanHub.EventService/README.md); task 33–54 mới có schema. Tất cả endpoint yêu cầu Bearer JWT theo workbook, trừ webhook 44–45 công khai ở tầng HTTP nhưng cần xác thực chữ ký provider.
 
 | STT | Method và endpoint | Chức năng theo phân công | Bảng / dữ liệu sử dụng |
 |---|---|---|---|

@@ -1,0 +1,10 @@
+**/bin
+**/obj
+**/node_modules
+**/vendor
+.git
+.vs
+.vscode
+**/.env
+**/.env.*
+**/TestResults
