@@ -8,23 +8,23 @@
     "net10.0": []
   },
   "packageFolders": {
-    "C:\\Users\\xcuon\\.nuget\\packages\\": {},
+    "C:\\Users\\Admin\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\xcuon\\OneDrive\\Desktop\\New folder\\FanHubPlus\\api-gateway\\FanHub.ApiGateway\\FanHub.ApiGateway.csproj",
+      "projectUniqueName": "C:\\Users\\Admin\\Downloads\\FanHubPlus\\api-gateway\\FanHub.ApiGateway\\FanHub.ApiGateway.csproj",
       "projectName": "FanHub.ApiGateway",
-      "projectPath": "C:\\Users\\xcuon\\OneDrive\\Desktop\\New folder\\FanHubPlus\\api-gateway\\FanHub.ApiGateway\\FanHub.ApiGateway.csproj",
-      "packagesPath": "C:\\Users\\xcuon\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\xcuon\\OneDrive\\Desktop\\New folder\\FanHubPlus\\api-gateway\\FanHub.ApiGateway\\obj\\",
+      "projectPath": "C:\\Users\\Admin\\Downloads\\FanHubPlus\\api-gateway\\FanHub.ApiGateway\\FanHub.ApiGateway.csproj",
+      "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\Admin\\Downloads\\FanHubPlus\\api-gateway\\FanHub.ApiGateway\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\xcuon\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\Admin\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -77,7 +77,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.401/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.400/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.AspNetCore": "(,10.0.32767]",
           "Microsoft.AspNetCore.Antiforgery": "(,10.0.32767]",

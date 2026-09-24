@@ -8,23 +8,23 @@
     "net10.0": []
   },
   "packageFolders": {
-    "C:\\Users\\xcuon\\.nuget\\packages\\": {},
+    "C:\\Users\\Admin\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\xcuon\\OneDrive\\Desktop\\New folder\\FanHubPlus\\services\\dotnet\\shared\\FanHub.Shared.Contracts\\FanHub.Shared.Contracts.csproj",
+      "projectUniqueName": "C:\\Users\\Admin\\Downloads\\FanHubPlus\\services\\dotnet\\shared\\FanHub.Shared.Contracts\\FanHub.Shared.Contracts.csproj",
       "projectName": "FanHub.Shared.Contracts",
-      "projectPath": "C:\\Users\\xcuon\\OneDrive\\Desktop\\New folder\\FanHubPlus\\services\\dotnet\\shared\\FanHub.Shared.Contracts\\FanHub.Shared.Contracts.csproj",
-      "packagesPath": "C:\\Users\\xcuon\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\xcuon\\OneDrive\\Desktop\\New folder\\FanHubPlus\\services\\dotnet\\shared\\FanHub.Shared.Contracts\\obj\\",
+      "projectPath": "C:\\Users\\Admin\\Downloads\\FanHubPlus\\services\\dotnet\\shared\\FanHub.Shared.Contracts\\FanHub.Shared.Contracts.csproj",
+      "packagesPath": "C:\\Users\\Admin\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\Admin\\Downloads\\FanHubPlus\\services\\dotnet\\shared\\FanHub.Shared.Contracts\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\xcuon\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\Admin\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -74,7 +74,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.401/PortableRuntimeIdentifierGraph.json",
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.400/PortableRuntimeIdentifierGraph.json",
         "packagesToPrune": {
           "Microsoft.CSharp": "(,4.7.32767]",
           "Microsoft.VisualBasic": "(,10.4.32767]",
