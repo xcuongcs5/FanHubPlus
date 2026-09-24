@@ -1,5 +1,31 @@
-﻿################################################################################
+################################################################################
 # This .gitignore file was automatically created by Microsoft(R) Visual Studio.
 ################################################################################
 
 /.vs
+/.vscode
+/bin/
+/obj/
+**/bin/
+**/obj/
+[Bb]in/
+[Oo]bj/
+
+# User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Environment & Dependencies
+.env
+.env.local
+node_modules/
+vendor/
+
+# OS files
+Thumbs.db
+[Dd]esktop.ini
+.DS_Store
+
