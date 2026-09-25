@@ -42,7 +42,6 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
-// ========== MassTransit + RabbitMQ ==========
 builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((context, cfg) =>
@@ -60,7 +59,6 @@ builder.Services.AddMassTransit(x =>
     });
 });
 
-// ========== Services ==========
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
