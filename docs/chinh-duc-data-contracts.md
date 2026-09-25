@@ -62,7 +62,7 @@ Luồng EventService đang triển khai: `Draft → PendingReview → Published`
 
 Một `BOOKING_REQUEST` có quantity; mỗi `TICKET_BOOKING` đại diện **một vé**. `purchaser_id` giữ người mua ban đầu, `user_id` là chủ vé hiện tại. Task 36 `{id}` sử dụng `booking_id` của vé; task 34 sử dụng `request_id` của yêu cầu bất đồng bộ. Thanh toán giai đoạn đầu theo từng vé; nếu cần checkout nhiều vé một lần, phải bổ sung payment order/items, không dùng request ID thay booking ID.
 
-Reservation: lưu request + outbox trong transaction; unique `(user_id,idempotency_key)` và `request_hash` giúp phân biệt retry hợp lệ với key tái sử dụng cho body khác. Consumer giữ vé bằng UPDATE có điều kiện rồi tạo đủ vé trong cùng transaction:
+Reservation: lưu request + outbox trong transaction; unique `(user_id,idempotency_key)` và `request_hash` giúp phân biệt retry hợp lệ với key tái sử dụng cho body khác. BookingService hiện khóa transaction theo event bằng `sp_getapplock`, kiểm tra tồn/sức chứa rồi cập nhật EF với rowversion và tạo đủ vé. UPDATE có điều kiện dưới đây là phương án tương đương cho thao tác tồn đơn lẻ:
 
 ```sql
 UPDATE dbo.TICKET_TYPE

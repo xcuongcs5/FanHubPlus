@@ -59,7 +59,7 @@ Các port có thể đổi trong `.env`. SQL/RabbitMQ/Redis chỉ bind loopback.
 
 Trong SSMS: chọn **SQL Server Authentication**, database tương ứng và tài khoản ứng dụng trong bảng đầu. Lấy mật khẩu từ biến `EVENT_DB_PASSWORD`, `BOOKING_DB_PASSWORD`, `PAYMENT_DB_PASSWORD`, `NOTIFICATION_DB_PASSWORD` trong `.env`; bật **Trust server certificate** cho môi trường Docker local.
 
-Connection string theo service (EventDb đã được EventService sử dụng, các key còn lại dành cho giai đoạn tiếp theo):
+Connection string theo service (EventDb và BookingDb đã được sử dụng, các key còn lại dành cho giai đoạn tiếp theo):
 
 ```text
 ConnectionStrings__EventDb=Server=localhost,14334;Database=fanhub_event;User Id=fanhub_event_app;Password=<EVENT_DB_PASSWORD>;Encrypt=True;TrustServerCertificate=True
@@ -76,6 +76,7 @@ Khi service chạy cùng network Docker, đổi host thành `sqlserver,1433`. V�
 - `002_messaging.sql`: cùng định nghĩa kỹ thuật nhưng tạo độc lập trong từng database.
 - `003_...sql`: các ràng buộc bổ sung của Booking và Payment.
 - `004_review_request.sql`: Event lưu ID lần gửi duyệt tại EVENT/EVENT_REVIEW để chặn kết quả cũ.
+- `booking/004_booking_lifecycle.sql`: version cấu hình hạng vé, lỗi Blockchain và BOOKING_PAYMENT chống trùng/hoàn bù.
 - Thêm file mới với số tăng dần, duy nhất trong tập service + common, ví dụ `004_add_index.sql`. Script SQL không chứa `GO`, `USE`, `COMMIT`, `ROLLBACK` hoặc các chỉ thị sqlcmd; runner bọc transaction và thực thi một batch.
 - Migration được khóa bằng `sp_getapplock`, lưu SHA-256 và commit cùng DDL. Chạy lại bỏ qua phiên bản đã áp dụng. Nếu nội dung file đã áp dụng bị sửa, runner dừng. `.gitattributes` giữ LF để checksum không đổi khi checkout Windows/Linux.
 - Tài khoản ứng dụng không có quyền DDL, không ghi `__schema_migrations`, không truy cập database service khác. `WALLET_LEDGER` chỉ cho ứng dụng SELECT/INSERT; điều chỉnh tiền bằng entry nghiệp vụ bổ sung, không sửa lịch sử.
@@ -96,6 +97,6 @@ Không thêm `-v` nếu muốn giữ database, queue và cache bền vững. Đ�
 
 `Start-Databases.ps1 -Verify` còn kiểm tra checksum chống sửa migration cũ và rollback DDL/history khi một migration cố ý thất bại. Test chỉ sửa bản sao trong thư mục tạm của container; không sửa file migration nguồn và không giữ bảng thử nghiệm.
 
-Kiểm thử stock hiện kiểm tra cập nhật có điều kiện và CHECK constraint; chưa phải load test đồng thời của API. Chưa kiểm thử gateway thanh toán, QR blockchain, RabbitMQ redelivery hoặc push thực tế vì các thành phần nghiệp vụ chưa được viết.
+Test database kiểm tra CHECK constraint và quyền truy cập. Bộ integration test [BookingService](../services/dotnet/FanHub.BookingService/README.md) kiểm tra đặt vé đồng thời, inbox/outbox, lifecycle và chữ ký QR trên SQL/Rabbit thật. Chưa kiểm thử gateway thanh toán, blockchain node hoặc push provider thật.
 
 Tham khảo vận hành chính thức: [SQL Server container và sqlcmd](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker), [Compose healthcheck và thứ tự khởi động](https://docs.docker.com/compose/how-tos/startup-order/).
