@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fanhub-sqlserver
+    user: "0:0"
+    ports:
+      - "14333:1433"
+    environment:
+      ACCEPT_EULA: Y
+      MSSQL_SA_PASSWORD: "FanHubPlus@2026!"
+    volumes:
+      - sqlserver_data:/var/opt/mssql/data
+
+  mysql-cms:
+    image: mysql:8.0
+    container_name: fanhub-mysql-cms
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: fanhub_cms
+      MYSQL_USER: ${MYSQL_USER:-fanhub}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-fanhub_secret}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_secret}
+    volumes:
+      - mysql_cms_data:/var/lib/mysql
+
+  redis:
+    image: redis:7-alpine
+    container_name: fanhub-redis
+    ports:
+      - "6370:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-fanhub_redis}
+    volumes:
+      - redis_data:/data
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: fanhub-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-fanhub}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-fanhub_rabbit}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  sqlserver_data:
+  mysql_cms_data:
+  redis_data:
+  rabbitmq_data:

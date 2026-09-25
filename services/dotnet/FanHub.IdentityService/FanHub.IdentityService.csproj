@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FanHub.IdentityService</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.*" />
+    <PackageReference Include="FluentValidation.AspNetCore" Version="11.*" />
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.*" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.*">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="StackExchange.Redis" Version="2.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\shared\FanHub.Shared.Common\FanHub.Shared.Common.csproj" />
+    <ProjectReference Include="..\shared\FanHub.Shared.Contracts\FanHub.Shared.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,81 @@
+@host = http://127.0.0.1:5004
+@token = REPLACE_WITH_IDENTITY_ACCESS_TOKEN
+@eventId = REPLACE_WITH_CREATED_EVENT_UUID
+@categoryId = REPLACE_WITH_SYNCED_CATEGORY_UUID
+@staffId = REPLACE_WITH_SYNCED_USER_UUID
+@version = REPLACE_WITH_VERSION_FROM_GET_DETAILS
+
+### 21 List published events
+GET {{host}}/api/v1/events?page=1&limit=20&sort=newest
+Authorization: Bearer {{token}}
+
+### 22 Event details (owner can also read Draft/PendingReview)
+GET {{host}}/api/v1/events/{{eventId}}
+Authorization: Bearer {{token}}
+
+### 23 My organized events
+GET {{host}}/api/v1/events/organizer/me?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### 24 Create draft. Dates must be in the future.
+POST {{host}}/api/v1/events
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "FanHub Meetup",
+  "description": "Giao luu cong dong FanHub",
+  "start_time": "2030-01-10T09:00:00+07:00",
+  "end_time": "2030-01-10T17:00:00+07:00",
+  "capacity": 200,
+  "location": { "name": "Hoi truong", "address": "TP Ho Chi Minh", "latitude": 10.7769, "longitude": 106.7009 }
+}
+
+### 25 Full update of Draft/Rejected; refresh version after any mutation
+PUT {{host}}/api/v1/events/{{eventId}}
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "title": "FanHub Meetup updated",
+  "description": "Giao luu cong dong FanHub",
+  "start_time": "2030-01-10T09:00:00+07:00",
+  "end_time": "2030-01-10T17:00:00+07:00",
+  "capacity": 200,
+  "location": { "name": "Hoi truong", "address": "TP Ho Chi Minh", "latitude": 10.7769, "longitude": 106.7009 },
+  "version": "{{version}}"
+}
+
+### 26 Submit for moderation (202, does not self-approve; assign category first)
+POST {{host}}/api/v1/events/{{eventId}}/publish
+Authorization: Bearer {{token}}
+
+### 27 Cancel, preserving history
+DELETE {{host}}/api/v1/events/{{eventId}}
+Authorization: Bearer {{token}}
+
+### 28 Issued tickets and their current holders
+GET {{host}}/api/v1/events/{{eventId}}/attendees?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### 29 Add existing synchronized categories
+POST {{host}}/api/v1/events/{{eventId}}/categories
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "category_ids": ["{{categoryId}}"] }
+
+### 30 Active synchronized categories
+GET {{host}}/api/v1/categories?page=1&limit=20
+Authorization: Bearer {{token}}
+
+### 31 Assign or update an active synchronized user's staff role
+POST {{host}}/api/v1/events/{{eventId}}/staffs
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "user_id": "{{staffId}}", "role": "CheckIn" }
+
+### 32 Featured published events
+GET {{host}}/api/v1/events/featured?page=1&limit=20
+Authorization: Bearer {{token}}

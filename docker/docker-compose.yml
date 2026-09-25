@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  # API Gateway
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/FanHub.ApiGateway/Dockerfile
+    ports:
+      - "5000:8080"
+    depends_on:
+      - identity-service
+      - content-service
+      - merchandise-service
+      - event-service
+      - chatbot-service
+      - interaction-service
+      - media-streaming-service
+      - cms-service
+
+  # Identity Service
+  identity-service:
+    build:
+      context: .
+      dockerfile: services/dotnet/FanHub.IdentityService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Host=postgres-identity;Database=fanhub_identity;Username=fanhub;Password=fanhub_secret
+    ports:
+      - "5001:8080"
+
+  # Content Service
+  content-service:
+    build:
+      context: .
+      dockerfile: services/dotnet/FanHub.ContentService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "5002:8080"
+
+  # Merchandise Service
+  merchandise-service:
+    build:
+      context: .
+      dockerfile: services/dotnet/FanHub.MerchandiseService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "5003:8080"
+
+  # Event Service
+  event-service:
+    build:
+      context: .
+      dockerfile: services/dotnet/FanHub.EventService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "5004:8080"
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: services/dotnet/FanHub.NotificationService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "5005:8080"
+
+  # Chatbot Service (Python)
+  chatbot-service:
+    build:
+      context: ./services/python/ai-chatbot-service
+      dockerfile: Dockerfile
+    ports:
+      - "5006:8080"
+
+  # Interaction Service (C#)
+  interaction-service:
+    build:
+      context: .
+      dockerfile: services/dotnet/FanHub.InteractionService/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+    ports:
+      - "5007:8080"
+
+  # Media Streaming Service (Node.js)
+  media-streaming-service:
+    build:
+      context: ./services/nodejs/media-streaming-service
+      dockerfile: Dockerfile
+    ports:
+      - "5008:8080"
+
+  # CMS Service (PHP)
+  cms-service:
+    build:
+      context: ./services/php/fanhub-cms-service
+      dockerfile: Dockerfile
+    ports:
+      - "5009:8080"
+

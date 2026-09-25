@@ -1,0 +1,6 @@
+@FanHub.MerchandiseService_HostAddress = http://localhost:5031
+
+GET {{FanHub.MerchandiseService_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

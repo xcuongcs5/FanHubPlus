@@ -1,0 +1,24 @@
+<Solution>
+  <Folder Name="/api-gateway/">
+    <Project Path="api-gateway/FanHub.ApiGateway/FanHub.ApiGateway.csproj" />
+  </Folder>
+  <Folder Name="/services/" />
+  <Folder Name="/services/dotnet/">
+    <Project Path="services/dotnet/FanHub.AnalyticsService/FanHub.AnalyticsService.csproj" />
+    <Project Path="services/dotnet/FanHub.PaymentWalletService/FanHub.PaymentWalletService.csproj" />
+    <Project Path="services/dotnet/FanHub.BookingService/FanHub.BookingService.csproj" />
+    <Project Path="services/dotnet/FanHub.ContentService/FanHub.ContentService.csproj" />
+    <Project Path="services/dotnet/FanHub.EventService/FanHub.EventService.csproj" />
+    <Project Path="services/dotnet/FanHub.IdentityService/FanHub.IdentityService.csproj" />
+    <Project Path="services/dotnet/FanHub.InteractionService/FanHub.InteractionService.csproj" />
+    <Project Path="services/dotnet/FanHub.MerchandiseService/FanHub.MerchandiseService.csproj" />
+    <Project Path="services/dotnet/FanHub.NotificationService/FanHub.NotificationService.csproj" />
+  </Folder>
+  <Folder Name="/services/dotnet/shared/">
+    <Project Path="services/dotnet/shared/FanHub.Shared.Common/FanHub.Shared.Common.csproj" />
+    <Project Path="services/dotnet/shared/FanHub.Shared.Contracts/FanHub.Shared.Contracts.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FanHub.EventService.IntegrationTests/FanHub.EventService.IntegrationTests.csproj" />
+  </Folder>
+</Solution>
