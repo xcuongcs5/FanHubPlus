@@ -1,0 +1,14 @@
+-- Read-only operational checks. Contains no token or notification content.
+SELECT status, COUNT_BIG(*) AS deliveries,
+       MIN(next_attempt_at) AS oldest_next_attempt
+FROM dbo.NOTIFICATION_DELIVERY GROUP BY status;
+
+SELECT TOP (100) delivery_id, notification_id, status, attempt_count,
+       next_attempt_at, locked_until, expires_at, last_error
+FROM dbo.NOTIFICATION_DELIVERY
+WHERE status = 'Failed' OR (status = 'Processing' AND locked_until < SYSUTCDATETIME())
+ORDER BY next_attempt_at;
+
+SELECT COUNT_BIG(*) AS stale_active_devices
+FROM dbo.DEVICE_TOKEN
+WHERE is_active = 1 AND last_seen_at < DATEADD(day,-30,SYSUTCDATETIME());

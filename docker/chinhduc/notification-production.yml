@@ -1,0 +1,46 @@
+# Standalone deployment against externally operated SQL/RabbitMQ.
+# TLS ingress and workload identity are supplied by the deployment platform.
+name: fanhub-notification-production
+services:
+  notification-service:
+    image: ${NOTIFICATION_IMAGE:?Use a tested immutable image tag or digest}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__NotificationDb: ${NOTIFICATION_CONNECTION_STRING:?Required; Encrypt=True and TrustServerCertificate=False}
+      Jwt__Secret: ${JWT_SECRET:?Required}
+      Jwt__Issuer: ${JWT_ISSUER:?Required}
+      Jwt__Audience: ${JWT_AUDIENCE:?Required}
+      RabbitMq__Host: ${NOTIFICATION_RABBIT_HOST:?Required}
+      RabbitMq__Port: '5671'
+      RabbitMq__VirtualHost: ${NOTIFICATION_RABBIT_VHOST:?Required}
+      RabbitMq__Username: ${NOTIFICATION_RABBIT_USER:?Required}
+      RabbitMq__Password: ${NOTIFICATION_RABBIT_PASSWORD:?Required}
+      RabbitMq__UseTls: 'true'
+      Firebase__Enabled: 'true'
+      Firebase__ProjectId: ${FIREBASE_PROJECT_ID:?Required}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-credential.json
+    secrets:
+      - source: firebase_credential
+        target: firebase-credential.json
+    ports:
+      - '127.0.0.1:${NOTIFICATION_HTTP_PORT:-5012}:8080'
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 512m
+    cpus: 1.0
+    stop_grace_period: 45s
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'dotnet', 'FanHub.NotificationService.dll', '--health-check']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+secrets:
+  firebase_credential:
+    file: ${FIREBASE_CREDENTIALS_FILE:?Mount a service account or workload identity ADC configuration}

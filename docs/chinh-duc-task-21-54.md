@@ -11,11 +11,11 @@ Nguồn: `PhanCong_API_V3_Admin.xlsx`, sheet **Phân Công 70 APIs**, các hàng
 5. Báo cáo ghi .NET 8; các project hiện tại dùng `net10.0`. Giai đoạn database không đổi target framework hoặc code của đồng đội.
 6. Identity hiện đã dùng SQL Server/EF Core/MassTransit và Guid. Vì vậy schema mới dùng SQL Server `uniqueidentifier`, không lấy chuỗi mẫu `usr_xxx/evt_xxx` làm định dạng khóa vật lý.
 7. Docker cũ có connection PostgreSQL cho Identity trong khi code dùng `AuthDb` SQL Server; infra cũ còn MySQL CMS. Docker mới nằm riêng tại `docker/chinhduc`, tránh áp đặt thay đổi lên phần việc ngoài 21–54.
-8. Khi khảo sát ban đầu, bốn service của Chính Đức chưa có DbContext/entity/controller nghiệp vụ; Event và Payment còn weatherforecast mẫu. EventService đã triển khai 21–32, BookingService đã triển khai 33–42; Payment/Notification chưa có API nghiệp vụ.
+8. Khi khảo sát ban đầu, bốn service của Chính Đức chưa có DbContext/entity/controller nghiệp vụ; Event và Payment còn weatherforecast mẫu. EventService đã triển khai 21–32, BookingService đã triển khai 33–42; NotificationService đã triển khai 51–54 với Firebase; Payment/Wallet 43–50 tạm hoãn chờ sandbox.
 
 ## Ánh xạ 34 task sang schema
 
-Bảng dưới ánh xạ **database hỗ trợ** từng task. Task 21–32 hiện đã có implementation và integration tests, xem [EventService](../services/dotnet/FanHub.EventService/README.md); task 33–42 có [BookingService và integration tests](../services/dotnet/FanHub.BookingService/README.md); task 43–54 mới có schema. Tất cả endpoint yêu cầu Bearer JWT theo workbook, trừ webhook 44–45 công khai ở tầng HTTP nhưng cần xác thực chữ ký provider.
+Bảng dưới ánh xạ **database hỗ trợ** từng task. Task 21–32 hiện đã có implementation và integration tests, xem [EventService](../services/dotnet/FanHub.EventService/README.md); task 33–42 có [BookingService và integration tests](../services/dotnet/FanHub.BookingService/README.md); task 51–54 có [NotificationService/Firebase](../services/dotnet/FanHub.NotificationService/README.md); task 43–50 mới có schema và tạm hoãn theo yêu cầu nhóm. Tất cả endpoint yêu cầu Bearer JWT theo workbook, trừ webhook 44–45 công khai ở tầng HTTP nhưng cần xác thực chữ ký provider.
 
 | STT | Method và endpoint | Chức năng theo phân công | Bảng / dữ liệu sử dụng |
 |---|---|---|---|

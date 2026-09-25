@@ -59,7 +59,7 @@ Các port có thể đổi trong `.env`. SQL/RabbitMQ/Redis chỉ bind loopback.
 
 Trong SSMS: chọn **SQL Server Authentication**, database tương ứng và tài khoản ứng dụng trong bảng đầu. Lấy mật khẩu từ biến `EVENT_DB_PASSWORD`, `BOOKING_DB_PASSWORD`, `PAYMENT_DB_PASSWORD`, `NOTIFICATION_DB_PASSWORD` trong `.env`; bật **Trust server certificate** cho môi trường Docker local.
 
-Connection string theo service (EventDb và BookingDb đã được sử dụng, các key còn lại dành cho giai đoạn tiếp theo):
+Connection string theo service (EventDb, BookingDb và NotificationDb đã được sử dụng; PaymentDb dành cho giai đoạn tiếp theo):
 
 ```text
 ConnectionStrings__EventDb=Server=localhost,14334;Database=fanhub_event;User Id=fanhub_event_app;Password=<EVENT_DB_PASSWORD>;Encrypt=True;TrustServerCertificate=True
@@ -100,3 +100,5 @@ Không thêm `-v` nếu muốn giữ database, queue và cache bền vững. Đ�
 Test database kiểm tra CHECK constraint và quyền truy cập. Bộ integration test [BookingService](../services/dotnet/FanHub.BookingService/README.md) kiểm tra đặt vé đồng thời, inbox/outbox, lifecycle và chữ ký QR trên SQL/Rabbit thật. Chưa kiểm thử gateway thanh toán, blockchain node hoặc push provider thật.
 
 Tham khảo vận hành chính thức: [SQL Server container và sqlcmd](https://learn.microsoft.com/en-us/sql/linux/quickstart-install-connect-docker), [Compose healthcheck và thứ tự khởi động](https://docs.docker.com/compose/how-tos/startup-order/).
+
+Notification migration `003_delivery_safety.sql` bổ sung binding/lease/TTL và booking version projection. [Notification integration tests](../services/dotnet/FanHub.NotificationService/README.md) kiểm tra API, transaction và delivery trên SQL/Rabbit thật; Firebase transport được giả lập trong test, không gửi tới thiết bị người dùng.

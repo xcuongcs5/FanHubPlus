@@ -8,3 +8,6 @@
 **/.env
 **/.env.*
 **/TestResults
+docker/secrets
+docker/env
+**/*service-account*.json
