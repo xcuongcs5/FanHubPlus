@@ -1,11 +1,11 @@
 $ErrorActionPreference = 'Stop'
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $temporaryRoot = [IO.Path]::GetFullPath([IO.Path]::GetTempPath())
-$buildRoot = Join-Path $temporaryRoot ('fanhub-booking-build-' + [Guid]::NewGuid().ToString('N'))
+$buildRoot = Join-Path $temporaryRoot ('fanhub-identity-build-' + [Guid]::NewGuid().ToString('N'))
 try {
     # OneDrive can represent hydrated source files as reparse points which BuildKit rejects.
-    # Materialize only the two projects needed for this image, without cloud attributes.
-    foreach ($project in @('services/dotnet/FanHub.BookingService', 'services/dotnet/shared/FanHub.Shared.Contracts')) {
+    # Materialize only the projects needed for this image, without cloud attributes.
+    foreach ($project in @('services/dotnet/FanHub.IdentityService', 'services/dotnet/shared/FanHub.Shared.Contracts', 'services/dotnet/shared/FanHub.Shared.Common')) {
         $source = Join-Path $repository $project
         $files = Get-ChildItem -LiteralPath $source -Recurse -File | Where-Object {
             $_.FullName -notmatch '[\\/](bin|obj)[\\/]' -and
@@ -19,13 +19,13 @@ try {
         }
     }
     [IO.File]::WriteAllBytes((Join-Path $buildRoot '.dockerignore'), [IO.File]::ReadAllBytes((Join-Path $repository '.dockerignore')))
-    & docker build -t fanhub-chinhduc-booking-service:local -f (Join-Path $buildRoot 'services/dotnet/FanHub.BookingService/Dockerfile') $buildRoot
-    if ($LASTEXITCODE -ne 0) { throw 'Booking Docker image build failed.' }
+    & docker build -t fanhub-chinhduc-identity-service:local -f (Join-Path $buildRoot 'services/dotnet/FanHub.IdentityService/Dockerfile') $buildRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Identity Docker image build failed.' }
 } finally {
     $resolved = [IO.Path]::GetFullPath($buildRoot)
     $allowedRoot = $temporaryRoot.TrimEnd([IO.Path]::DirectorySeparatorChar) + [IO.Path]::DirectorySeparatorChar
     if (-not $resolved.StartsWith($allowedRoot, [StringComparison]::OrdinalIgnoreCase) -or
-        [IO.Path]::GetFileName($resolved) -notmatch '^fanhub-booking-build-[a-f0-9]{32}$') {
+        [IO.Path]::GetFileName($resolved) -notmatch '^fanhub-identity-build-[a-f0-9]{32}$') {
         throw 'Refusing to remove a directory outside the generated temporary build context.'
     }
     if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
