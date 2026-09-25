@@ -1,0 +1,17 @@
+-- Read-only operations checks. Run with an operations account, not an HTTP endpoint.
+-- Any row below requires investigation; never blindly reset a Processing refund to Pending.
+SELECT refund_id, transaction_id, status, attempted_at, last_error, next_query_at
+FROM dbo.PAYMENT_REFUND
+WHERE status = 'Failed' OR (status = 'Processing' AND attempted_at < DATEADD(hour,-1,SYSUTCDATETIME()));
+
+SELECT transaction_id, merchant_reference, status, amount, query_attempts, next_query_at
+FROM dbo.PAYMENT_TRANSACTION
+WHERE query_attempts >= 100 OR (status = 'Pending' AND expires_at < DATEADD(hour,-1,SYSUTCDATETIME()));
+
+SELECT message_id, event_type, attempt_count, last_error FROM dbo.OUTBOX_MESSAGE
+WHERE published_at IS NULL AND (attempt_count >= 20 OR occurred_at < DATEADD(minute,-5,SYSUTCDATETIME()));
+
+SELECT w.wallet_id, w.balance, COALESCE(SUM(CASE WHEN l.entry_type='Payment' THEN -l.amount ELSE l.amount END),0) AS ledger_balance
+FROM dbo.WALLET w LEFT JOIN dbo.WALLET_LEDGER l ON l.wallet_id=w.wallet_id
+GROUP BY w.wallet_id,w.balance
+HAVING w.balance <> COALESCE(SUM(CASE WHEN l.entry_type='Payment' THEN -l.amount ELSE l.amount END),0);

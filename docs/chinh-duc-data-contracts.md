@@ -2,7 +2,7 @@
 
 Đây là quyết định thiết kế bổ sung để chuyển tài liệu phân công thành schema có thể triển khai. Các trạng thái, idempotency key và trường kỹ thuật dưới đây không phải hợp đồng API hoàn chỉnh đã được tài liệu nguồn quy định. Cần dùng chúng khi triển khai API và thống nhất event contract với đồng đội.
 
-Cập nhật triển khai: EventService đã có API 21–32, custom inbox/outbox worker, consumers và các record tích hợp C#. [README EventService](../services/dotnet/FanHub.EventService/README.md) mô tả chính xác trạng thái/HTTP contract đang chạy. Các đoạn mô tả Booking, Payment, Notification dưới đây vẫn là thiết kế cho giai đoạn tiếp theo.
+Cập nhật triển khai: EventService đã có API 21–32, custom inbox/outbox worker, consumers và các record tích hợp C#. [README EventService](../services/dotnet/FanHub.EventService/README.md) mô tả chính xác trạng thái/HTTP contract đang chạy. Booking, Payment và Notification hiện đã có implementation; README của từng service ghi rõ hợp đồng thực tế, kiểm thử và các bước tích hợp ngoài còn thiếu. Payment hiện hoàn toàn bộ transaction; task 45 có MoMo callback handler nhưng create/query/refund MoMo chưa được bật.
 
 ## Ranh giới service
 

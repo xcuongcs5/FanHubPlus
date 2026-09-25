@@ -22,5 +22,6 @@
     <Project Path="tests/FanHub.NotificationService.IntegrationTests/FanHub.NotificationService.IntegrationTests.csproj" />
     <Project Path="tests/FanHub.BookingService.IntegrationTests/FanHub.BookingService.IntegrationTests.csproj" />
     <Project Path="tests/FanHub.EventService.IntegrationTests/FanHub.EventService.IntegrationTests.csproj" />
+    <Project Path="tests/FanHub.PaymentWalletService.IntegrationTests/FanHub.PaymentWalletService.IntegrationTests.csproj" />
   </Folder>
 </Solution>

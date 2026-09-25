@@ -1,0 +1,14 @@
+# Requires real merchant credentials and trusted infrastructure certificates.
+# Sandbox is Development only; this overlay intentionally fails with the sandbox secret file.
+services:
+  payment-service:
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__PaymentDb: ${PAYMENT_PRODUCTION_CONNECTION:?Supply SQL connection with Encrypt=True and TrustServerCertificate=False}
+      RabbitMq__Host: ${PAYMENT_RABBIT_TLS_HOST:?Supply RabbitMQ TLS certificate hostname}
+      RabbitMq__Port: ${PAYMENT_RABBIT_TLS_PORT:-5671}
+      RabbitMq__UseTls: 'true'
+      AllowedHosts: ${PAYMENT_PUBLIC_HOST:?Supply public API hostname}
+      VnPay__Sandbox: 'false'
+      VnPay__PaymentUrl: https://pay.vnpay.vn/vpcpay.html
+      VnPay__ApiUrl: https://pay.vnpay.vn/merchant_webapi/api/transaction
