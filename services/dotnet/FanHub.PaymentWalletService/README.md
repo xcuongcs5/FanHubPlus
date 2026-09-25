@@ -58,6 +58,10 @@ Phát BookingPaymentResultEvent và BookingRefundResultEvent qua outbox lease/pu
 
 ## Sandbox / production
 
+Cập nhật theo nhóm ngày 25/09/2026: **tạm hoãn task 45 MoMo** do chưa đăng ký được sandbox; tạm hoãn nghiệm thu trên Merchant/SIT VNPAY do cổng đăng nhập chưa sử dụng được. Không thay xác thực chữ ký bằng mock trong runtime và không đánh dấu SIT đã đạt. Các chức năng VNPAY/ví, kiểm thử tự động và worker đối soát được giữ nguyên.
+
+Đã chuẩn bị tunnel sandbox tùy chọn: `pwsh -File docker/chinhduc/Start-VnPayTunnel.ps1`. Proxy chỉ mở IPN và Return, không mở Swagger/API ví. Script lưu URL trong `docker/secrets/payment-tunnel.json`, cập nhật ReturnUrl và restart Payment. Quick Tunnel có thể đổi hostname khi restart, chỉ dùng thử nghiệm; production cần domain HTTPS ổn định. Tunnel hiện đã dừng theo quyết định hoãn test. Khi tiếp tục, chạy script và đăng ký URL IPN mới với VNPAY; không dùng lại hostname cũ khi chưa kiểm tra.
+
 VNPAY phải gọi được **HTTPS công khai** `/api/v1/payments/webhook/vnpay`; đăng ký URL với VNPAY/SIT. localhost chỉ chạy local/ReturnUrl dev, không phải IPN từ Internet. Hiện chưa có public domain. Đặt ReturnUrl/ServerIp đúng môi trường. Sau proxy, cấu hình `ReverseProxy:KnownProxies` đúng IP; không tin X-Forwarded-For tùy ý. Ingress giữ nguyên query, không log bearer/checksum.
 
 `payment-production.yml` bổ sung SQL/Rabbit TLS, hostname, endpoint production. Secret JSON load sau env nên phải thay bằng **bộ merchant production đầy đủ**; không dùng sandbox trong Production. Startup từ chối SQL không xác minh chứng chỉ, Rabbit không TLS, tắt worker, sandbox Production. Trước vận hành cần HTTPS ingress, secret manager, broker ACL, backup/PITR, cảnh báo, clock sync và SIT thực tế. Docker Development healthy không chứng minh đã đủ các điều kiện đó.

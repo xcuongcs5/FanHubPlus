@@ -1,0 +1,16 @@
+# Sandbox only. A Quick Tunnel hostname can change after restarting the tunnel.
+services:
+  vnpay-callback-proxy:
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    volumes:
+      - ./vnpay-callbacks.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      payment-service:
+        condition: service_healthy
+    restart: unless-stopped
+  vnpay-tunnel:
+    image: cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c
+    command: ['tunnel', '--no-autoupdate', '--protocol', 'http2', '--url', 'http://vnpay-callback-proxy:8080']
+    depends_on:
+      - vnpay-callback-proxy
+    restart: unless-stopped

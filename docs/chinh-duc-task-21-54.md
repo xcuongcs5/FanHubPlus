@@ -56,6 +56,8 @@ Bảng dưới ánh xạ **database hỗ trợ** từng task. Task 21–32 hiệ
 
 ## Điểm tích hợp còn phụ thuộc nhóm
 
+Cập nhật 25/09/2026: nhóm tạm hoãn task 45 MoMo và kiểm thử Merchant/SIT VNPAY do vấn đề cổng sandbox. Task 43–44, 46–50 đã có implementation/kiểm thử tự động; chưa nghiệm thu thanh toán–IPN–hoàn tiền trên provider thật. Docker tunnel sandbox đã chuẩn bị và đang tắt. Cấu hình production, giám sát và nghiệm thu provider vẫn là điều kiện trước khi dùng tiền thật.
+
 - Identity: event user và quyền EventOwner/Admin, định dạng JWT subject nhất quán.
 - Community/CMS: event danh mục; quyết định duyệt/hủy Event phải gửi về service sở hữu Event.
 - AI: kết quả kiểm duyệt bất đồng bộ cho task 26.
