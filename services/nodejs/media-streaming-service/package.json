@@ -4,10 +4,23 @@
   "description": "FanHub Plus - Media Streaming Service (HTTP 206 Byte-Range Audio/Video Streaming)",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
+    "start": "node index.js",
+    "dev": "node --watch index.js",
     "test": "jest"
   },
-  "keywords": ["streaming", "media", "video", "audio", "range-request"],
-  "license": "ISC"
+  "keywords": [
+    "streaming",
+    "media",
+    "video",
+    "audio",
+    "range-request"
+  ],
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@fastify/multipart": "^10.1.2",
+    "dotenv": "^18.0.3",
+    "fastify": "^5.12.5",
+    "pump": "^3.0.4"
+  }
 }
