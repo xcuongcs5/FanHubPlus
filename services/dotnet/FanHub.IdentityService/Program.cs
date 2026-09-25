@@ -47,7 +47,11 @@ builder.Services.AddMassTransit(x =>
 {
     x.UsingRabbitMq((context, cfg) =>
     {
-        cfg.Host(builder.Configuration["RabbitMq:Host"] ?? "localhost", "/", h =>
+        var rmqHost = builder.Configuration["RabbitMq:Host"] ?? "localhost";
+        var rmqPort = builder.Configuration.GetValue<ushort>("RabbitMq:Port", 5673);
+        var rmqVhost = builder.Configuration["RabbitMq:VHost"] ?? "fanhub";
+        
+        cfg.Host(rmqHost, rmqPort, rmqVhost, h =>
         {
             h.Username(builder.Configuration["RabbitMq:Username"] ?? "fanhub");
             h.Password(builder.Configuration["RabbitMq:Password"] ?? "fanhub_rabbit");
