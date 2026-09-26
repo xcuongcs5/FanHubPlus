@@ -20,6 +20,12 @@ Write-Host "`n6. Khoi dong Payment Service..."
 Write-Host "`n7. Khoi dong Search Service (MongoDB + Node.js)..."
 .\docker\chinhduc\Start-SearchService.ps1
 
+Write-Host "`n8. Khoi dong Blockchain Service (Node.js)..."
+.\docker\chinhduc\Start-BlockchainService.ps1
+
+Write-Host "`n9. Khoi dong Chatbot Service (Python + Qdrant)..."
+.\docker\chinhduc\Start-ChatbotService.ps1
+
 Write-Host "`n====== HOAN TAT ======" -ForegroundColor Green
 Write-Host "Cac service hien dang chay ngam trong Docker."
 Write-Host "De dung toan bo, chay lenh: docker compose --env-file docker/chinhduc/.env -f docker/chinhduc/compose.yml down" -ForegroundColor Yellow

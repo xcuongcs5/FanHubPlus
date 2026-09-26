@@ -26,9 +26,7 @@ public sealed class EventService(EventDbContext db)
             "start_time" => query.OrderBy(x => x.StartTime).ThenBy(x => x.EventId),
             _ => query.OrderByDescending(x => x.CreatedAt).ThenBy(x => x.EventId)
         };
-        var data = await sorted.Skip((page.Page - 1) * page.Limit).Take(page.Limit)
-            .Select(x => new { Id = x.EventId, x.OrganizerId, x.Title, x.BannerUrl, x.StartTime, x.EndTime,
-                x.Capacity, x.Status, x.IsFeatured, x.LocationId, x.CreatedAt, Version = Convert.ToBase64String(x.Version) }).ToListAsync(ct);
+        var data = await (from x in sorted.Skip((page.Page - 1) * page.Limit).Take(page.Limit) join loc in db.Locations on x.LocationId equals loc.LocationId select new { Id = x.EventId, x.OrganizerId, x.Title, x.BannerUrl, x.StartTime, x.EndTime, x.Capacity, x.Status, x.IsFeatured, Location = new { Id = loc.LocationId, Name = loc.Name, Address = loc.Address, Latitude = loc.Latitude, Longitude = loc.Longitude }, x.CreatedAt, Version = Convert.ToBase64String(x.Version) }).ToListAsync(ct);
         return new { Data = data, Meta = new { total, page.Page, page.Limit } };
     }
 

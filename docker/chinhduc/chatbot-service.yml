@@ -1,0 +1,31 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: fanhub-qdrant
+    ports:
+      - '127.0.0.1:6333:6333'
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
+  chatbot-service:
+    image: fanhub-chinhduc-chatbot-service:local
+    build:
+      context: ../../services/python/chatbot-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: '3005'
+      GEMINI_API_KEY: '${GEMINI_API_KEY}'
+      QDRANT_URL: 'http://qdrant:6333'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672/'
+      REDIS_URL: 'redis://redis:6379'
+    ports:
+      - '127.0.0.1:3005:3005'
+    depends_on:
+      - qdrant
+      - rabbitmq
+      - redis
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:

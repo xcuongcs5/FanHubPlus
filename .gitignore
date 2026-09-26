@@ -28,3 +28,5 @@ vendor/
 Thumbs.db
 [Dd]esktop.ini
 .DS_Store
+Start-AllServices.ps1
+Start-NodeServices.ps1
