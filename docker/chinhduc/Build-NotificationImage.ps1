@@ -12,7 +12,7 @@ try {
             ($_.Extension -in '.cs','.csproj' -or $_.Name -in 'Dockerfile','appsettings.json','appsettings.Development.json')
         }
         foreach ($file in $files) {
-            $relative = [IO.Path]::GetRelativePath($repository, $file.FullName)
+            $relative = $file.FullName.Substring($repository.Length).TrimStart('\', '/')
             $destination = Join-Path $buildRoot $relative
             [IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($destination)) | Out-Null
             [IO.File]::WriteAllBytes($destination, [IO.File]::ReadAllBytes($file.FullName))
