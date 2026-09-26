@@ -1,0 +1,13 @@
+**/bin
+**/obj
+**/node_modules
+**/vendor
+.git
+.vs
+.vscode
+**/.env
+**/.env.*
+**/TestResults
+docker/secrets
+docker/env
+**/*service-account*.json

@@ -1,0 +1,33 @@
+services:
+  booking-service:
+    image: fanhub-chinhduc-booking-service:local
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.BookingService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__BookingDb: 'Server=sqlserver,1433;Database=fanhub_booking;User Id=fanhub_booking_app;Password=${BOOKING_DB_PASSWORD};Encrypt=True;TrustServerCertificate=True'
+      Jwt__Secret: ${JWT_SECRET:?Run Start-BookingService.ps1 first}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VirtualHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Blockchain__SignerAddress: ${BLOCKCHAIN_SIGNER_ADDRESS:-}
+    ports:
+      - '127.0.0.1:${BOOKING_HTTP_PORT:-5010}:8080'
+    healthcheck:
+      test: ['CMD', 'dotnet', 'FanHub.BookingService.dll', '--health-check']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped

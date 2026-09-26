@@ -18,4 +18,11 @@
     <Project Path="services/dotnet/shared/FanHub.Shared.Common/FanHub.Shared.Common.csproj" />
     <Project Path="services/dotnet/shared/FanHub.Shared.Contracts/FanHub.Shared.Contracts.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FanHub.NotificationService.IntegrationTests/FanHub.NotificationService.IntegrationTests.csproj" />
+    <Project Path="tests/FanHub.BookingService.IntegrationTests/FanHub.BookingService.IntegrationTests.csproj" />
+    <Project Path="tests/FanHub.EventService.IntegrationTests/FanHub.EventService.IntegrationTests.csproj" />
+    <Project Path="tests/FanHub.PaymentWalletService.IntegrationTests/FanHub.PaymentWalletService.IntegrationTests.csproj" />
+    <Project Path="services/dotnet/FanHub.IdentityService.UnitTests/FanHub.IdentityService.UnitTests.csproj" />
+  </Folder>
 </Solution>

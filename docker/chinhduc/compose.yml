@@ -1,0 +1,77 @@
+name: fanhub-chinhduc
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?Run Initialize-Environment.ps1 first}
+    ports:
+      - '127.0.0.1:${SQL_PORT:-14334}:1433'
+    volumes:
+      - sql_data:/var/opt/mssql
+    healthcheck:
+      test: ['CMD-SHELL', 'SQLCMDPASSWORD="$$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -Q "SELECT 1" -o /dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+
+  db-migrate:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      SQL_SERVER: sqlserver
+      SQLCMDPASSWORD: ${MSSQL_SA_PASSWORD:?Run Initialize-Environment.ps1 first}
+      EVENT_DB_PASSWORD: ${EVENT_DB_PASSWORD:?Missing EVENT_DB_PASSWORD}
+      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD:?Missing BOOKING_DB_PASSWORD}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD:?Missing PAYMENT_DB_PASSWORD}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD:?Missing NOTIFICATION_DB_PASSWORD}
+    volumes:
+      - ../../database:/database:ro
+      - ./scripts:/scripts:ro
+    entrypoint: ['/bin/bash', '/scripts/migrate.sh']
+    restart: 'no'
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: fanhub
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Missing RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: fanhub
+    ports:
+      - '127.0.0.1:${RABBITMQ_PORT:-5673}:5672'
+      - '127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15673}:15672'
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Missing REDIS_PASSWORD}
+    command: ['/bin/sh', '-c', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6381}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  sql_data:
+  rabbitmq_data:
+  redis_data:

@@ -1,0 +1,13 @@
+{
+  "VnPay": {
+    "Enabled": true,
+    "Sandbox": true,
+    "TmnCode": "REPLACE_ME",
+    "HashSecret": "REPLACE_WITH_SANDBOX_SECRET",
+    "PaymentUrl": "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+    "ApiUrl": "https://sandbox.vnpayment.vn/merchant_webapi/api/transaction",
+    "ReturnUrl": "http://localhost:5011/api/v1/payments/return/vnpay",
+    "ServerIp": "127.0.0.1"
+  },
+  "MoMo": { "Enabled": false }
+}

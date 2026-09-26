@@ -1,0 +1,3 @@
+# Never commit provider credentials or local runtime secrets.
+secrets/
+env/notification.env

@@ -1,0 +1,32 @@
+services:
+  event-service:
+    image: fanhub-chinhduc-event-service:local
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.EventService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__EventDb: 'Server=sqlserver,1433;Database=fanhub_event;User Id=fanhub_event_app;Password=${EVENT_DB_PASSWORD};Encrypt=True;TrustServerCertificate=True'
+      Jwt__Secret: ${JWT_SECRET:?Run Start-EventService.ps1 first}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VirtualHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+    ports:
+      - '127.0.0.1:${EVENT_HTTP_PORT:-5004}:8080'
+    healthcheck:
+      test: ['CMD', 'dotnet', 'FanHub.EventService.dll', '--health-check']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped

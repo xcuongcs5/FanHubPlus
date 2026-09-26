@@ -1,0 +1,19 @@
+﻿services:
+  blockchain-service:
+    image: fanhub-chinhduc-blockchain-service:local
+    build:
+      context: ../../services/nodejs/blockchain-service
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: '3004'
+      MONGO_URI: 'mongodb://fanhub:${MONGO_PASSWORD:-secret}@mongodb-search:27017/fanhub_blockchain?authSource=admin'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672'
+    ports:
+      - '127.0.0.1:${BLOCKCHAIN_HTTP_PORT:-3004}:3004'
+    depends_on:
+      mongodb-search:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
