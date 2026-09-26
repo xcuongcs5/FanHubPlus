@@ -1,0 +1,39 @@
+﻿services:
+  mongodb-search:
+    image: mongo:6
+    container_name: fanhub-mongodb-search
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: fanhub
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-secret}
+    ports:
+      - '127.0.0.1:${MONGO_PORT:-27017}:27017'
+    volumes:
+      - mongodb_search_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  search-service:
+    image: fanhub-chinhduc-search-service:local
+    build:
+      context: ../../services/nodejs/search-service
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: '3003'
+      MONGO_URI: 'mongodb://fanhub:${MONGO_PASSWORD:-secret}@mongodb-search:27017/fanhub_search?authSource=admin'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672'
+    ports:
+      - '127.0.0.1:${SEARCH_HTTP_PORT:-3003}:3003'
+    depends_on:
+      mongodb-search:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  mongodb_search_data:
