@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # Redis dùng để lưu trữ Tọa độ và siêu dữ liệu (Metadata)
+  redis-gps:
+    image: redis:7-alpine
+    container_name: fanhub-redis-gps
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+
+  # RabbitMQ dùng để nhận Event Message từ hệ thống C#
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: fanhub-rabbitmq
+    ports:
+      - "5672:5672"   # Port giao tiếp mặc định
+      - "15672:15672" # Port trang quản trị Web UI (username/password: guest/guest)
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+volumes:
+  redis_data:
+  rabbitmq_data:
