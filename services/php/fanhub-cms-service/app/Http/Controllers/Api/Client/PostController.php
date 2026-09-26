@@ -188,7 +188,7 @@ class PostController extends Controller
     }
 
     /**
-     * Thích bài viết (Like / Unlike)
+     * Thích bài viết
      * POST /api/v1/posts/{id}/like
      */
     public function toggleLike(Request $request, string $id): JsonResponse
@@ -203,33 +203,29 @@ class PostController extends Controller
 
         $userId = $request->attributes->get('auth_user_id') ?? 'user_guest';
 
-        $existing = ReactionBookmark::where('user_id', $userId)
+        $reaction = ReactionBookmark::where('user_id', $userId)
             ->where('target_type', 'content')
             ->where('target_id', $id)
             ->where('action_type', 'like')
             ->first();
 
-        if ($existing) {
-            $existing->delete();
-            $post->decrement('likes_count');
-            $liked = false;
-            $message = 'Đã hủy thích bài viết';
+        if ($reaction) {
+            // Nếu đã thích rồi thì giữ nguyên hoặc toggle
+            $message = 'Thích bài viết thành công';
         } else {
-            ReactionBookmark::create([
+            $reaction = ReactionBookmark::create([
                 'user_id' => $userId,
                 'target_type' => 'content',
                 'target_id' => $id,
                 'action_type' => 'like',
             ]);
             $post->increment('likes_count');
-            $liked = true;
             $message = 'Thích bài viết thành công';
         }
 
         return response()->json([
+            'id' => $reaction->id,
             'message' => $message,
-            'liked' => $liked,
-            'likes_count' => (int) $post->fresh()->likes_count,
-        ], JsonResponse::HTTP_OK);
+        ], JsonResponse::HTTP_CREATED);
     }
 }

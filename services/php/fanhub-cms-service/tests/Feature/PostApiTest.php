@@ -182,7 +182,7 @@ class PostApiTest extends TestCase
         ]);
     }
 
-    public function test_can_like_and_unlike_post(): void
+    public function test_can_like_post(): void
     {
         $token = $this->generateBearerJwt('user-007');
 
@@ -193,15 +193,20 @@ class PostApiTest extends TestCase
             'likes_count' => 0,
         ]);
 
-        // 1. Thích bài viết
         $likeResponse = $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->postJson('/api/v1/posts/' . $post->id . '/like');
+            ->postJson('/api/v1/posts/' . $post->id . '/like', [
+                'title' => 'Dữ liệu mẫu',
+                'description' => 'Chi tiết Thích bài viết',
+                'status' => 'active',
+            ]);
 
-        $likeResponse->assertStatus(200)
+        $likeResponse->assertStatus(201)
             ->assertJson([
                 'message' => 'Thích bài viết thành công',
-                'liked' => true,
-                'likes_count' => 1,
+            ])
+            ->assertJsonStructure([
+                'id',
+                'message',
             ]);
 
         $this->assertDatabaseHas('reaction_bookmarks', [
@@ -210,16 +215,5 @@ class PostApiTest extends TestCase
             'target_id' => $post->id,
             'action_type' => 'like',
         ]);
-
-        // 2. Bỏ thích bài viết
-        $unlikeResponse = $this->withHeader('Authorization', 'Bearer ' . $token)
-            ->postJson('/api/v1/posts/' . $post->id . '/like');
-
-        $unlikeResponse->assertStatus(200)
-            ->assertJson([
-                'message' => 'Đã hủy thích bài viết',
-                'liked' => false,
-                'likes_count' => 0,
-            ]);
     }
 }

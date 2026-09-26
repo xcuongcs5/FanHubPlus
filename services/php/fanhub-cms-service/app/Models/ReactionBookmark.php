@@ -30,7 +30,7 @@ class ReactionBookmark extends Model
     {
         static::creating(function (ReactionBookmark $reaction) {
             if (empty($reaction->id)) {
-                $reaction->id = 'react_' . Str::lower(Str::random(12));
+                $reaction->id = 'req_' . Str::lower(Str::random(12));
             }
             if (empty($reaction->created_at)) {
                 $reaction->created_at = now();
