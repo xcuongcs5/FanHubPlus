@@ -15,16 +15,35 @@ use Illuminate\Support\Facades\Route;
 */
 
 use App\Http\Controllers\Api\Admin\CategoryController;
+use App\Http\Controllers\Api\Admin\DashboardController;
+use App\Http\Controllers\Api\Admin\EventController;
+use App\Http\Controllers\Api\Admin\FinancialController;
+use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Client\CommentController;
 use App\Http\Controllers\Api\Client\GroupController;
 use App\Http\Controllers\Api\Client\PostController;
 
 Route::prefix('v1/admin')->middleware(['admin.jwt'])->group(function () {
+    // Categories
     Route::get('categories', [CategoryController::class, 'index']);
     Route::get('categories/{id}', [CategoryController::class, 'show']);
     Route::post('categories', [CategoryController::class, 'store']);
     Route::put('categories/{id}', [CategoryController::class, 'update']);
     Route::delete('categories/{id}', [CategoryController::class, 'destroy']);
+
+    // Dashboard Overview
+    Route::get('dashboard/overview', [DashboardController::class, 'overview']);
+
+    // Users & Ban
+    Route::get('users', [UserController::class, 'index']);
+    Route::match(['put', 'post'], 'users/{id}/ban', [UserController::class, 'ban']);
+
+    // Events Pending & Approve
+    Route::get('events/pending', [EventController::class, 'pending']);
+    Route::post('events/{id}/approve', [EventController::class, 'approve']);
+
+    // Financial Reports
+    Route::get('financial/reports', [FinancialController::class, 'reports']);
 });
 
 Route::prefix('v1')->middleware(['client.jwt'])->group(function () {
