@@ -28,7 +28,7 @@ Write-Host " FANHUB - TOOL CAP QUYEN ADMIN TUDONG" -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 Write-Host "Dang ket noi vao Database SQL Server..."
 
-$cmd = "docker exec fanhub-chinhduc-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Fh9@30FDC55AD49C662C2F74778B2AB306FE514A0BF96DA1DB77 -C -d FanHub_Identity -Q `"$sqlQuery`""
+$cmd = "docker exec fanhub-chinhduc-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Fh9@02FE4691F98196E2AB6BE7EBE079BCD01BC7F999648B72D6 -C -d FanHub_Identity -Q `"$sqlQuery`""
 Invoke-Expression $cmd
 
 Write-Host "`nNeu bao thanh cong, vui long dAng xuat va dAng nhap lai tren web de nhan quyen." -ForegroundColor Yellow

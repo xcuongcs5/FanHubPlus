@@ -46,6 +46,7 @@ public sealed class NotificationDbContext(DbContextOptions<NotificationDbContext
         model.Entity<NotificationDelivery>().Property(x => x.ProviderMessageId).HasColumnName("provider_message_id").HasColumnType("varchar(250)");
         model.Entity<UserProjection>().ToTable("USER_PROJECTION").HasKey(x => x.UserId);
         model.Entity<UserProjection>().Property(x => x.UserId).HasColumnName("user_id").HasColumnType("uniqueidentifier").ValueGeneratedNever();
+        model.Entity<UserProjection>().Property(x => x.Email).HasColumnName("email").HasColumnType("varchar(150)");
         model.Entity<UserProjection>().Property(x => x.FullName).HasColumnName("full_name").HasColumnType("nvarchar(200)");
         model.Entity<UserProjection>().Property(x => x.AvatarUrl).HasColumnName("avatar_url").HasColumnType("nvarchar(500)");
         model.Entity<UserProjection>().Property(x => x.Status).HasColumnName("status").HasColumnType("varchar(20)");

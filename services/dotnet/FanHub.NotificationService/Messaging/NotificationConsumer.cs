@@ -36,7 +36,7 @@ public sealed class NotificationConsumer<T>(NotificationDbContext db, Notificati
                     if (m.Status == "Active")
                     {
                         var user = await db.Users.FindAsync([m.UserId], ct);
-                        string userEmail = config["TEST_TARGET_EMAIL"] ?? config["Smtp:Username"] ?? "fanhub.demo@gmail.com";
+                        string userEmail = !string.IsNullOrEmpty(user?.Email) ? user.Email : (config["TEST_TARGET_EMAIL"] ?? config["Smtp:Username"] ?? "fanhub.demo@gmail.com");
                         string userName = user?.FullName ?? "bạn";
                         
                         string body = $@"
@@ -55,14 +55,14 @@ public sealed class NotificationConsumer<T>(NotificationDbContext db, Notificati
                     }
                 }
                 break;
-            case UserCreatedEvent m: await UserAsync(m.UserId, m.FullName, m.AvatarUrl, m.CreatedAt, false, ct); break;
-            case UserUpdatedEvent m: await UserAsync(m.UserId, m.FullName, m.AvatarUrl, m.UpdatedAt, false, ct); break;
-            case UserBannedEvent m: await UserAsync(m.UserId, null, null, m.BannedAt, true, ct); break;
+            case UserCreatedEvent m: await UserAsync(m.UserId, m.Email, m.FullName, m.AvatarUrl, m.CreatedAt, false, ct); break;
+            case UserUpdatedEvent m: await UserAsync(m.UserId, m.Email, m.FullName, m.AvatarUrl, m.UpdatedAt, false, ct); break;
+            case UserBannedEvent m: await UserAsync(m.UserId, null, null, null, m.BannedAt, true, ct); break;
         }
         db.Inbox.Add(new InboxMessage { Consumer = consumer, MessageId = id });
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
     }
-    private async Task UserAsync(Guid id, string? name, string? avatar, DateTime timestamp, bool banned, CancellationToken ct)
+    private async Task UserAsync(Guid id, string? email, string? name, string? avatar, DateTime timestamp, bool banned, CancellationToken ct)
     {
         if (id == Guid.Empty || timestamp == default || name?.Length > 200 || avatar?.Length > 500) throw new ArgumentException("Invalid user snapshot.");
         await store.LockAsync($"user:{id}", ct);
@@ -70,6 +70,7 @@ public sealed class NotificationConsumer<T>(NotificationDbContext db, Notificati
         if (item is not null && (item.SourceUpdatedAt > timestamp || item.SourceUpdatedAt == timestamp && !banned)) return;
         if (item is null) { item = new UserProjection { UserId = id, Status = "Active" }; db.Users.Add(item); }
         if (name is not null) { item.FullName = name; item.AvatarUrl = avatar; }
+        if (email is not null) item.Email = email;
         if (banned) item.Status = "Banned";
         item.SourceUpdatedAt = timestamp; item.SyncedAt = DateTime.UtcNow;
     }
