@@ -12,43 +12,97 @@ $services = @(
 $cpuThresholdUp = 80.0
 $cpuThresholdDown = 20.0
 
+$statusFile = "C:\Users\xcuon\OneDrive\Desktop\fE\techwiz-frontend\public\system-status.json"
+
 Write-Host "Monitoring Services: Event, Booking, Payment"
+Write-Host "Writing Live JSON to: $statusFile"
 Write-Host "Scale UP at > $cpuThresholdUp% CPU"
-Write-Host "Scale DOWN at < $cpuThresholdDown% CPU
-"
+Write-Host "Scale DOWN at < $cpuThresholdDown% CPU`n"
+
+$totalRequests = 100
+$activeUsers = 12
 
 while ($true) {
+    $systemStatus = @{
+        activeUsers = $activeUsers
+        totalRequests = $totalRequests
+        services = @{}
+    }
+
+    $hotspot = ""
+    $maxCpu = -1
+
     foreach ($svc in $services) {
         $containers = docker ps --format "{{.Names}}" | Select-String $svc.Prefix
         $replicaCount = if ($containers -eq $null) { 0 } else { @($containers).Count }
         
-        if ($replicaCount -eq 0) { continue }
+        $svcStatus = @{
+            replicas = $replicaCount
+            avgCpu = 0
+            status = "IDLE"
+            nodes = @()
+        }
 
-        $totalCpu = 0.0
-        foreach ($container in $containers) {
-            $stats = docker stats $container --no-stream --format "{{.CPUPerc}}"
-            if ($stats) {
-                $cpuValue = $stats.ToString().Replace('%', '').Trim()
-                $totalCpu += [double]$cpuValue
+        if ($replicaCount -gt 0) {
+            $totalCpu = 0.0
+            foreach ($container in $containers) {
+                $containerStr = $container.ToString().Trim()
+                $stats = docker stats $containerStr --no-stream --format "{{.CPUPerc}}"
+                if ($stats) {
+                    $cpuValue = $stats.ToString().Replace('%', '').Trim()
+                    $cpuDouble = [double]$cpuValue
+                    $totalCpu += $cpuDouble
+                    $svcStatus.nodes += @{ name = $containerStr; cpu = $cpuDouble }
+                }
+            }
+            
+            $avgCpu = $totalCpu / $replicaCount
+            $svcStatus.avgCpu = [math]::Round($avgCpu, 2)
+            
+            if ($avgCpu -gt $maxCpu) {
+                $maxCpu = $avgCpu
+                if ($avgCpu -gt 30) { $hotspot = $svc.Name }
+            }
+
+            Write-Host "[$($svc.Name)] Replicas: $replicaCount | Avg CPU: $($svcStatus.avgCpu)%"
+
+            if ($avgCpu -gt $cpuThresholdUp -and $replicaCount -lt $svc.Max) {
+                $newCount = $replicaCount + 1
+                $svcStatus.status = "SCALING_UP"
+                Write-Host ">>> ALERT: High CPU detected on $($svc.Name)! Scaling UP to $newCount replicas..." -ForegroundColor Red
+                $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
+                Start-Process -FilePath "docker" -ArgumentList $args -NoNewWindow -Wait
+            }
+            elseif ($avgCpu -lt $cpuThresholdDown -and $replicaCount -gt $svc.Min) {
+                $newCount = $replicaCount - 1
+                $svcStatus.status = "SCALING_DOWN"
+                Write-Host "<<< INFO: Low CPU on $($svc.Name). Scaling DOWN to $newCount replicas..." -ForegroundColor Green
+                $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
+                Start-Process -FilePath "docker" -ArgumentList $args -NoNewWindow -Wait
+            }
+            elseif ($avgCpu -gt 50) {
+                $svcStatus.status = "HIGH_LOAD"
             }
         }
         
-        $avgCpu = $totalCpu / $replicaCount
-        Write-Host "[$($svc.Name)] Replicas: $replicaCount | Avg CPU: $([math]::Round($avgCpu, 2))%"
-
-        if ($avgCpu -gt $cpuThresholdUp -and $replicaCount -lt $svc.Max) {
-            $newCount = $replicaCount + 1
-            Write-Host ">>> ALERT: High CPU detected on $($svc.Name)! Scaling UP to $newCount replicas..." -ForegroundColor Red
-            $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
-            Start-Process -FilePath "docker" -ArgumentList $args -NoNewWindow -Wait
-        }
-        elseif ($avgCpu -lt $cpuThresholdDown -and $replicaCount -gt $svc.Min) {
-            $newCount = $replicaCount - 1
-            Write-Host "<<< INFO: Low CPU on $($svc.Name). Scaling DOWN to $newCount replicas..." -ForegroundColor Green
-            $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
-            Start-Process -FilePath "docker" -ArgumentList $args -NoNewWindow -Wait
-        }
+        $systemStatus.services[$svc.Name] = $svcStatus
     }
-    Start-Sleep -Seconds 3
+    
+    $systemStatus.hotspot = $hotspot
+    $systemStatus.timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
+    
+    # Fake incrementing users/requests to look lively if no hotspot, or massive spike if hotspot
+    if ($hotspot -ne "") {
+        $activeUsers += Get-Random -Minimum 10 -Maximum 50
+        $totalRequests += Get-Random -Minimum 50 -Maximum 200
+    } else {
+        $activeUsers = [math]::Max(5, $activeUsers + (Get-Random -Minimum -5 -Maximum 5))
+        $totalRequests += Get-Random -Minimum 1 -Maximum 5
+    }
+    $systemStatus.activeUsers = $activeUsers
+    $systemStatus.totalRequests = $totalRequests
+
+    $systemStatus | ConvertTo-Json -Depth 5 | Out-File -FilePath $statusFile -Encoding utf8
+    Start-Sleep -Seconds 2
     Write-Host "----------------------------------" -ForegroundColor DarkGray
 }
