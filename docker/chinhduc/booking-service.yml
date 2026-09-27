@@ -18,7 +18,7 @@ services:
       RabbitMq__Password: ${RABBITMQ_PASSWORD}
       Blockchain__SignerAddress: ${BLOCKCHAIN_SIGNER_ADDRESS:-}
     ports:
-      - '127.0.0.1:${BOOKING_HTTP_PORT:-5010}:8080'
+      - '127.0.0.1:5010-5020:8080'
     healthcheck:
       test: ['CMD', 'dotnet', 'FanHub.BookingService.dll', '--health-check']
       interval: 15s

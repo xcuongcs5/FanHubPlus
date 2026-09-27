@@ -1,0 +1,19 @@
+services:
+  gps-location-service:
+    image: fanhub-chinhduc-gps-location-service:local
+    build:
+      context: ../../services/nodejs/gps-location-service
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      REDIS_URL: 'redis://redis:6379'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672'
+    ports:
+      - '127.0.0.1:3001:3001'
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped

@@ -1,3 +1,4 @@
+using Prometheus;
 using System.Security.Claims;
 using System.Text;
 using System.Text.Json;
@@ -136,9 +137,12 @@ app.Use(async (context, next) =>
     }
 });
 if (app.Environment.IsDevelopment()) { app.UseSwagger(); app.UseSwaggerUI(); }
+app.UseRouting();
+app.UseHttpMetrics();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapMetrics();
 app.MapGet("/health/live", () => Results.Ok(new { service = "FanHub.BookingService", status = "Alive" })).ExcludeFromDescription();
 app.MapGet("/health/ready", async (BookingDbContext db, CancellationToken ct) =>
 {

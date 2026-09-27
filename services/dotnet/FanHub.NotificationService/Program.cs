@@ -37,6 +37,7 @@ if (production)
 }
 builder.Services.AddDbContext<NotificationDbContext>(options => options.UseSqlServer(connection));
 builder.Services.AddScoped<FanHub.NotificationService.Services.NotificationStore>();
+builder.Services.AddScoped<FanHub.NotificationService.Services.IEmailSender, FanHub.NotificationService.Services.SmtpEmailSender>();
 
 builder.Services.AddControllers().AddJsonOptions(options =>
 {

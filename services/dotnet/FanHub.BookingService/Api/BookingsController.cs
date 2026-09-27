@@ -95,4 +95,18 @@ public sealed class BookingsController(BookingDbContext db, Services.BookingServ
         await bookings.SnapshotAsync(ticket, ct); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return Ok(new { ticket.BookingId, ticket.Status, ticket.CheckedInAt });
     }
+
+    [AllowAnonymous]
+    [HttpGet("stress-test")]
+    public IActionResult StressTest()
+    {
+        // Simulate heavy CPU load (e.g., complex seat map calculation, cryptography)
+        var end = DateTime.UtcNow.AddMilliseconds(200);
+        double result = 0;
+        while (DateTime.UtcNow < end)
+        {
+            result += Math.Sqrt(new Random().NextDouble());
+        }
+        return Ok(new { message = "Calculated", value = result });
+    }
 }

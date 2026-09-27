@@ -103,7 +103,7 @@ exports.clearIndex = async (request, reply) => {
         const filter = indexName === 'All' ? {} : { entityType: indexName };
         const result = await SearchIndex.deleteMany(filter);
 
-        return reply.send({ message: Cleared index: , deletedCount: result.deletedCount });
+        return reply.send({ message: 'Cleared index', deletedCount: result.deletedCount });
     } catch (error) {
         request.log.error(error);
         return reply.code(500).send({ message: 'Internal Server Error' });

@@ -12,7 +12,7 @@ Write-Host "`n4. Khoi dong Booking Service..."
 .\docker\chinhduc\Start-BookingService.ps1
 
 Write-Host "`n5. Khoi dong Notification Service..."
-.\docker\chinhduc\Start-NotificationService.ps1
+.\docker\chinhduc\Start-NotificationService.ps1 -WithFirebase
 
 Write-Host "`n6. Khoi dong Payment Service..."
 .\docker\chinhduc\Start-PaymentService.ps1
