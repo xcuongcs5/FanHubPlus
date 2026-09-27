@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FanHub.NotificationService.Messaging;
 
-public sealed class NotificationConsumer<T>(NotificationDbContext db, NotificationStore store) : IConsumer<T> where T : class
+public sealed class NotificationConsumer<T>(NotificationDbContext db, NotificationStore store, FanHub.NotificationService.Services.IEmailSender emailSender, Microsoft.Extensions.Configuration.IConfiguration config) : IConsumer<T> where T : class
 {
     public async Task Consume(ConsumeContext<T> context)
     {
@@ -29,8 +29,31 @@ public sealed class NotificationConsumer<T>(NotificationDbContext db, Notificati
                 if (previous is null) { previous = new BookingNotificationState { BookingId = m.BookingId }; db.BookingStates.Add(previous); }
                 previous.UserId = m.UserId; previous.Status = m.Status; previous.SourceVersion = m.SourceVersion;
                 if (changed && m.Status is "Active" or "Cancelled" or "Expired" or "RefundPending" or "Refunded" or "CheckedIn")
+                {
                     await store.CreateAsync(id, new NotificationRequestedEvent(m.UserId, "Booking." + m.Status, "Cập nhật vé FanHub",
                         $"Trạng thái vé của bạn: {m.Status}.", new() { ["booking_id"] = m.BookingId.ToString(), ["event_id"] = m.EventId.ToString(), ["status"] = m.Status }), ct);
+                    
+                    if (m.Status == "Active")
+                    {
+                        var user = await db.Users.FindAsync([m.UserId], ct);
+                        string userEmail = config["TEST_TARGET_EMAIL"] ?? config["Smtp:Username"] ?? "fanhub.demo@gmail.com";
+                        string userName = user?.FullName ?? "bạn";
+                        
+                        string body = $@"
+                        <h2>Xin chào {userName},</h2>
+                        <p>Vé sự kiện của bạn đã được đúc thành công trên hệ thống Blockchain.</p>
+                        <p>Mã vé (Booking ID): {m.BookingId}</p>
+                        <p>Vui lòng giữ lại email này để check-in tại sự kiện.</p>
+                        <br/>
+                        <p>Cảm ơn bạn đã sử dụng FanHubPlus!</p>";
+                        
+                        try {
+                            await emailSender.SendEmailAsync(userEmail, "FanHub - Đặt vé thành công!", body);
+                        } catch (Exception ex) {
+                            Console.WriteLine("Error sending email: " + ex.Message);
+                        }
+                    }
+                }
                 break;
             case UserCreatedEvent m: await UserAsync(m.UserId, m.FullName, m.AvatarUrl, m.CreatedAt, false, ct); break;
             case UserUpdatedEvent m: await UserAsync(m.UserId, m.FullName, m.AvatarUrl, m.UpdatedAt, false, ct); break;

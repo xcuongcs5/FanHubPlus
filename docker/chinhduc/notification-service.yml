@@ -18,6 +18,11 @@ services:
       RabbitMq__Password: ${RABBITMQ_PASSWORD}
       Firebase__Enabled: ${FIREBASE_ENABLED:-false}
       Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-}
+      Smtp__Host: smtp.gmail.com
+      Smtp__Port: 587
+      Smtp__Username: ${SMTP_USERNAME:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      TEST_TARGET_EMAIL: ${TEST_TARGET_EMAIL:-}
     ports:
       - '127.0.0.1:${NOTIFICATION_HTTP_PORT:-5012}:8080'
     healthcheck:
