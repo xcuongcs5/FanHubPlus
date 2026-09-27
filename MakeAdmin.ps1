@@ -1,34 +1,35 @@
 param (
-    [Parameter(Mandatory=$true, HelpMessage="Nhap email tai khoan ban muon nang cap len Admin")]
+    [Parameter(Mandatory=$true, HelpMessage="Nhap email cua tai khoan can nang cap")]
     [string]$Email
 )
 
-$sqlQuery = @"
-DECLARE @UserId UNIQUEIDENTIFIER = (SELECT Id FROM Users WHERE Email = '$Email');
+$sql = @"
+USE fanhub_identity;
+DECLARE @UserId UNIQUEIDENTIFIER = (SELECT Id FROM Users WHERE Email = '$($Email.ToLower())');
+DECLARE @AdminRoleId UNIQUEIDENTIFIER = '11111111-1111-1111-1111-111111111111';
+
 IF @UserId IS NOT NULL
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM UserRoles WHERE UserId = @UserId AND RoleId = '11111111-1111-1111-1111-111111111111')
+    IF NOT EXISTS (SELECT 1 FROM UserRoles WHERE UserId = @UserId AND RoleId = @AdminRoleId)
     BEGIN
-        INSERT INTO UserRoles (UserId, RoleId) VALUES (@UserId, '11111111-1111-1111-1111-111111111111');
-        PRINT '=== THANH CONG: Tai khoan $Email da duoc cap quyen Admin! ===';
+        INSERT INTO UserRoles (UserId, RoleId) VALUES (@UserId, @AdminRoleId);
+        PRINT 'SUCCESS: Tai khoan [$Email] da duoc nang cap len Admin!';
     END
-    ELSE
-    BEGIN
-        PRINT '=== THONG BAO: Tai khoan nay da la Admin tu truoc roi! ===';
+    ELSE BEGIN
+        PRINT 'INFO: Tai khoan [$Email] da la Admin tu truoc roi!';
     END
 END
-ELSE
-BEGIN
-    PRINT '=== LOI: Khong tim thay email nay trong database! ===';
+ELSE BEGIN
+    PRINT 'ERROR: Khong tim thay tai khoan [$Email] trong he thong. Vui long dang ky tren web truoc!';
 END
 "@
 
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host " FANHUB - TOOL CAP QUYEN ADMIN TUDONG" -ForegroundColor Cyan
-Write-Host "=============================================" -ForegroundColor Cyan
-Write-Host "Dang ket noi vao Database SQL Server..."
+$tempFile = "promotecmd.sql"
+$sql | Out-File -FilePath $tempFile -Encoding utf8
 
-$cmd = "docker exec fanhub-chinhduc-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P Fh9@02FE4691F98196E2AB6BE7EBE079BCD01BC7F999648B72D6 -C -d FanHub_Identity -Q `"$sqlQuery`""
-Invoke-Expression $cmd
+Write-Host "Dang cap quyen Admin cho [$Email]..." -ForegroundColor Cyan
+docker cp $tempFile fanhub-chinhduc-sqlserver-1:/promotecmd.sql
+docker exec fanhub-chinhduc-sqlserver-1 /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "Fh9@02FE4691F98196E2AB6BE7EBE079BCD01BC7F999648B72D6" -C -i /promotecmd.sql
 
-Write-Host "`nNeu bao thanh cong, vui long dAng xuat va dAng nhap lai tren web de nhan quyen." -ForegroundColor Yellow
+Remove-Item $tempFile -ErrorAction SilentlyContinue
+Write-Host "Xong! Vui long Dang xuat va Dang nhap lai de cap nhat quyen." -ForegroundColor Green
