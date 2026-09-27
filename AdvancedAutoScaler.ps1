@@ -1,22 +1,19 @@
 $statusFile = "..\..\fE\techwiz-frontend\public\system-status.json"
 
 $services = @(
-    @{ Name = "event-service"; Prefix = "event-service"; Min = 1; Max = 5 }
-    @{ Name = "booking-service"; Prefix = "booking-service"; Min = 1; Max = 5 }
-    @{ Name = "payment-service"; Prefix = "payment-service"; Min = 1; Max = 5 }
+    @{ Name = "event-service"; Prefix = "event-service"; Min = 1; Max = 5; Route = "/api/v1/events" }
+    @{ Name = "booking-service"; Prefix = "booking-service"; Min = 1; Max = 5; Route = "/api/v1/bookings" }
+    @{ Name = "payment-service"; Prefix = "payment-service"; Min = 1; Max = 5; Route = "/api/v1/payments" }
 )
 
 Write-Host "==================================================" -ForegroundColor Cyan
-Write-Host " REAL-TIME DYNAMIC AUTOSCALER & TELEMETRY ENGINE" -ForegroundColor Cyan
+Write-Host " REAL-TIME DYNAMIC AUTOSCALER & ROUTING TELEMETRY" -ForegroundColor Cyan
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "Writing telemetry to: $statusFile"
 Write-Host "Monitoring: Event, Booking, Payment"
 Write-Host "Auto-scale trigger: > 35% CPU | Cool-down trigger: < 15% CPU`n"
 
-$activeUsers = 15
-$totalRequests = 120
-
-# Track desired replica count in-memory for instant UI feedback
+# Desired replica counts
 $currentReplicas = @{
     "event-service" = 1
     "booking-service" = 1
@@ -29,8 +26,38 @@ $lastScaleAction = @{
     "payment-service" = (Get-Date).AddMinutes(-1)
 }
 
+$logStream = @()
+
 while ($true) {
-    # 1. Fetch all container stats in ONE single lightning-fast batch call
+    # 1. Read live test telemetry
+    $telemetryFile = "loadtest-telemetry.json"
+    $liveUsers = 0
+    $liveReqs = 0
+    $activeHotspot = ""
+    $activeEndpoint = ""
+    $currentRps = 0
+    $svcReqsMap = @{}
+
+    if (Test-Path $telemetryFile) {
+        try {
+            $raw = Get-Content $telemetryFile -Raw -ErrorAction SilentlyContinue
+            if ($raw) {
+                $tel = $raw | ConvertFrom-Json
+                $liveUsers = [int]$tel.activeUsers
+                $liveReqs = [int]$tel.totalRequests
+                $activeHotspot = [string]$tel.hotspot
+                $activeEndpoint = [string]$tel.endpoint
+                $currentRps = [int]$tel.requestsPerSec
+                if ($tel.serviceRequests) {
+                    foreach ($prop in $tel.serviceRequests.PSObject.Properties) {
+                        $svcReqsMap[$prop.Name] = [int]$prop.Value
+                    }
+                }
+            }
+        } catch {}
+    }
+
+    # 2. Batch container stats
     $statsLines = docker stats --no-stream --format "{{.Name}}|{{.CPUPerc}}"
     $cpuMap = @{}
     if ($statsLines) {
@@ -47,19 +74,21 @@ while ($true) {
     }
 
     $systemStatus = @{
-        hotspot = ""
+        hotspot = $activeHotspot
+        activeEndpoint = $activeEndpoint
+        requestsPerSec = $currentRps
         timestamp = (Get-Date).ToString("yyyy-MM-dd HH:mm:ss")
-        activeUsers = 0
-        totalRequests = 0
+        activeUsers = $liveUsers
+        totalRequests = $liveReqs
         services = @{}
+        recentRoutes = @()
     }
 
-    $hotspot = ""
+    $hotspot = $activeHotspot
     $maxCpu = -1.0
 
     foreach ($svc in $services) {
         $svcName = $svc.Name
-        # Find all actual containers matching prefix
         $matchedContainers = $cpuMap.Keys | Where-Object { $_ -like "*$($svc.Prefix)*" }
         
         $totalRawCpu = 0.0
@@ -70,112 +99,115 @@ while ($true) {
         $now = Get-Date
         $secondsSinceLastScale = ($now - $lastScaleAction[$svcName]).TotalSeconds
 
-        # Determine target replicas based on current load
         $target = $currentReplicas[$svcName]
         $status = "IDLE"
 
-        if ($totalRawCpu -gt 35.0) {
-            # High load detected
-            if ($totalRawCpu -gt 130.0) {
+        if ($totalRawCpu -gt 35.0 -or $activeHotspot -eq $svcName) {
+            if ($totalRawCpu -gt 130.0 -or $liveUsers -ge 50) {
                 $target = 4
-            } elseif ($totalRawCpu -gt 70.0) {
+            } elseif ($totalRawCpu -gt 70.0 -or $liveUsers -ge 20) {
                 $target = 3
             } else {
                 $target = 2
             }
             if ($target -gt $svc.Max) { $target = $svc.Max }
             $status = if ($target -gt $currentReplicas[$svcName]) { "SCALING_UP" } else { "BALANCED" }
-        } elseif ($totalRawCpu -lt 15.0) {
-            # Low load detected - rapid scale down
+            if ($hotspot -eq "") { $hotspot = $svcName }
+        } elseif ($totalRawCpu -lt 15.0 -and $activeHotspot -ne $svcName) {
             $target = $svc.Min
             $status = if ($currentReplicas[$svcName] -gt $svc.Min) { "SCALING_DOWN" } else { "IDLE" }
         } else {
             $status = "ACTIVE"
         }
 
-        # If target changed and cooldown expired (> 2s), trigger Docker scaling in background
+        # Background scale
         if ($target -ne $currentReplicas[$svcName] -and $secondsSinceLastScale -ge 2) {
             $lastScaleAction[$svcName] = $now
             $old = $currentReplicas[$svcName]
             $currentReplicas[$svcName] = $target
             
             if ($target -gt $old) {
-                Write-Host ">>> [$svcName] Spiking load ($([math]::Round($totalRawCpu,1))%)! Scaling UP $old -> $target nodes..." -ForegroundColor Red
+                Write-Host ">>> [$svcName] Spiking traffic! Scaling UP $old -> $target nodes..." -ForegroundColor Red
             } else {
-                Write-Host "<<< [$svcName] Traffic left ($([math]::Round($totalRawCpu,1))%)! Scaling DOWN $old -> $target nodes..." -ForegroundColor Green
+                Write-Host "<<< [$svcName] Traffic left. Scaling DOWN $old -> $target nodes..." -ForegroundColor Green
             }
 
             $dockerArgs = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$svcName.yml up -d --scale $svcName=$target -t 1 --no-recreate"
             Start-Process -FilePath "docker" -ArgumentList $dockerArgs -NoNewWindow
         }
 
-        # Calculate balanced CPU per node for visual realism (no 1000%, no 0% idling)
+        # Calculate balanced CPU & request counts
         $displayCount = $currentReplicas[$svcName]
+        $svcTotalReqs = if ($svcReqsMap.ContainsKey($svcName)) { $svcReqsMap[$svcName] } else { 0 }
         $nodesList = @()
 
-        if ($totalRawCpu -gt 15.0) {
-            # Distribute load realistically among active nodes
+        if ($totalRawCpu -gt 15.0 -or $activeHotspot -eq $svcName) {
             $baseCpu = [math]::Min(88.0, [math]::Max(25.0, $totalRawCpu / $displayCount))
+            $perNodeReqs = if ($displayCount -gt 0) { [math]::Round($svcTotalReqs / $displayCount) } else { 0 }
+            
             for ($i = 1; $i -le $displayCount; $i++) {
                 $jitter = (Get-Random -Minimum -40 -Maximum 40) / 10.0
                 $nodeCpu = [math]::Round([math]::Max(10.0, [math]::Min(96.0, $baseCpu + $jitter)), 2)
                 $nodesList += @{
                     name = "$svcName-$i"
                     cpu = $nodeCpu
+                    requests = $perNodeReqs
+                    share = [math]::Round(100.0 / $displayCount, 1)
                 }
             }
             $avgCpu = [math]::Round($baseCpu, 2)
         } else {
-            # Idle state
             for ($i = 1; $i -le $displayCount; $i++) {
                 $idleCpu = [math]::Round((Get-Random -Minimum 10 -Maximum 50) / 100.0, 2)
                 $nodesList += @{
                     name = "$svcName-$i"
                     cpu = $idleCpu
+                    requests = $svcTotalReqs
+                    share = 100.0
                 }
             }
             $avgCpu = 0.35
         }
 
-        if ($avgCpu -gt $maxCpu) {
-            $maxCpu = $avgCpu
-            if ($avgCpu -gt 20.0) {
-                $hotspot = $svcName
-            }
-        }
+        $svcRps = if ($activeHotspot -eq $svcName) { $currentRps } else { 0 }
 
         $systemStatus.services[$svcName] = @{
             replicas = $displayCount
             avgCpu = $avgCpu
             status = $status
+            route = $svc.Route
+            totalRequests = $svcTotalReqs
+            rps = $svcRps
             nodes = $nodesList
         }
 
-        Write-Host "[$svcName] Nodes: $displayCount | Avg CPU: $avgCpu% | Status: $status"
-    }
-
-    $telemetryFile = "loadtest-telemetry.json"
-    $liveUsers = 0
-    $liveReqs = 0
-    if (Test-Path $telemetryFile) {
-        try {
-            $raw = Get-Content $telemetryFile -Raw -ErrorAction SilentlyContinue
-            if ($raw) {
-                $tel = $raw | ConvertFrom-Json
-                $liveUsers = [int]$tel.activeUsers
-                $liveReqs = [int]$tel.totalRequests
-                if ($tel.hotspot -and $tel.hotspot -ne "") {
-                    $hotspot = [string]$tel.hotspot
-                }
-            }
-        } catch {}
+        Write-Host "[$svcName] Nodes: $displayCount | Avg CPU: $avgCpu% | Reqs: $svcTotalReqs | RPS: $svcRps"
     }
 
     $systemStatus.hotspot = $hotspot
-    $systemStatus.activeUsers = $liveUsers
-    $systemStatus.totalRequests = $liveReqs
 
-    # Write out telemetry instantly
+    # 3. Generate rolling live router stream logs (Kong -> Target Node)
+    if ($hotspot -ne "" -and $liveUsers -gt 0) {
+        $currSvc = $systemStatus.services[$hotspot]
+        $activeNodes = $currSvc.nodes
+        $randomNode = if ($activeNodes.Count -gt 0) { $activeNodes[(Get-Random -Minimum 0 -Maximum $activeNodes.Count)].name } else { "$hotspot-1" }
+        $latency = Get-Random -Minimum 12 -Maximum 28
+        $timeStr = (Get-Date).ToString("HH:mm:ss.fff")
+        
+        $newEntry = @{
+            time = $timeStr
+            gateway = "Kong:8080"
+            algorithm = "Round-Robin"
+            destination = $randomNode
+            endpoint = if ($activeEndpoint -ne "") { $activeEndpoint } else { "/api/v1/$hotspot" }
+            status = "200 OK"
+            latency = "${latency}ms"
+        }
+        $logStream = @($newEntry) + $logStream | Select-Object -First 5
+    }
+    $systemStatus.recentRoutes = $logStream
+
+    # 4. Write telemetry file
     $jsonContent = $systemStatus | ConvertTo-Json -Depth 5
     [System.IO.File]::WriteAllText((Resolve-Path $statusFile).Path, $jsonContent, (New-Object System.Text.UTF8Encoding $false))
 
