@@ -1,0 +1,34 @@
+services:
+  analytics-service:
+    image: fanhub-chinhduc-analytics-service:local
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.AnalyticsService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__AnalyticsDb: 'Server=sqlserver,1433;Database=fanhub_analytics;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True'
+      ConnectionStrings__Redis: 'redis:6379,password=${REDIS_PASSWORD}'
+      Jwt__Secret: ${JWT_SECRET:?Run Start-IdentityService.ps1 or Start-Databases.ps1 first}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VirtualHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      RabbitMq__QueuePrefix: fanhub-analytics
+    ports:
+      - '127.0.0.1:5015:8080'
+    healthcheck:
+      test: ['CMD', 'dotnet', 'FanHub.AnalyticsService.dll', '--health-check']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
