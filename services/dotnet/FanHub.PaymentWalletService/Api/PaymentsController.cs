@@ -16,6 +16,18 @@ namespace FanHub.PaymentWalletService.Api;
 [RequestSizeLimit(16384)]
 public sealed class PaymentsController(PaymentDbContext db, PaymentService service, IVnPayGateway gateway, IConfiguration config) : ControllerBase
 {
+    [AllowAnonymous]
+    [HttpGet("payments/stress-test")]
+    public IActionResult StressTest()
+    {
+        double result = 0;
+        for (int i = 0; i < 5000000; i++)
+        {
+            result += Math.Sqrt(i) * Math.Sin(i);
+        }
+        return Ok(new { message = "Payment CPU Stress complete", value = result });
+    }
+
     private Guid UserId => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private string ClientIp => HttpContext.Connection.RemoteIpAddress is { } ip ?
         (ip.IsIPv4MappedToIPv6 ? ip.MapToIPv4().ToString() : ip.ToString()) : "127.0.0.1";

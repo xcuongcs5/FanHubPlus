@@ -5,11 +5,23 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FanHub.EventService.Api;
 
-[ApiController]
+    [ApiController]
 [Authorize]
 [Route("api/v1/events")]
 public sealed class EventsController(Services.EventService service) : ControllerBase
 {
+    [AllowAnonymous]
+    [HttpGet("stress-test")]
+    public IActionResult StressTest()
+    {
+        double result = 0;
+        for (int i = 0; i < 5000000; i++)
+        {
+            result += Math.Sqrt(i) * Math.Sin(i);
+        }
+        return Ok(new { message = "Event CPU Stress complete", value = result });
+    }
+
     private Actor Actor => new(Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!), User.IsInRole("Admin"));
 
     [HttpGet]
