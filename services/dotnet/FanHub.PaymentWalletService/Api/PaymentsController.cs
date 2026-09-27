@@ -18,6 +18,7 @@ public sealed class PaymentsController(PaymentDbContext db, PaymentService servi
 {
     [AllowAnonymous]
     [HttpGet("payments/stress-test")]
+    [DisableRateLimiting]
     public IActionResult StressTest()
     {
         double result = 0;
