@@ -1,4 +1,4 @@
-﻿Write-Host "====== KHOI DONG TOAN BO FANHUBPLUS MOCROSERVICES ======" -ForegroundColor Cyan
+Write-Host "====== KHOI DONG TOAN BO FANHUBPLUS MOCROSERVICES ======" -ForegroundColor Cyan
 Write-Host "1. Khoi dong Ha tang (SQL Server, Redis, RabbitMQ)..."
 .\docker\chinhduc\Start-Databases.ps1 -Verify
 
@@ -26,6 +26,11 @@ Write-Host "`n8. Khoi dong Blockchain Service (Node.js)..."
 Write-Host "`n9. Khoi dong Chatbot Service (Python + Qdrant)..."
 .\docker\chinhduc\Start-ChatbotService.ps1
 
-Write-Host "`n====== HOAN TAT ======" -ForegroundColor Green
+Write-Host "
+10. Khoi dong Kong API Gateway..."
+.\docker\chinhduc\Start-KongGateway.ps1
+
+Write-Host "
+====== HOAN TAT ======" -ForegroundColor Green
 Write-Host "Cac service hien dang chay ngam trong Docker."
 Write-Host "De dung toan bo, chay lenh: docker compose --env-file docker/chinhduc/.env -f docker/chinhduc/compose.yml down" -ForegroundColor Yellow

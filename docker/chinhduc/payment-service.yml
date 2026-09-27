@@ -20,7 +20,7 @@ services:
     volumes:
       - ../secrets/payment-providers.json:/run/secrets/payment-providers.json:ro
     ports:
-      - '127.0.0.1:${PAYMENT_HTTP_PORT:-5011}:8080'
+      - '127.0.0.1:5011-5015:8080'
     healthcheck:
       test: ['CMD', 'dotnet', 'FanHub.PaymentWalletService.dll', '--health-check']
       interval: 15s
