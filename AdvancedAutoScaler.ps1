@@ -9,7 +9,7 @@ $services = @(
     @{ Name = 'payment-service'; Prefix = 'fanhub-chinhduc-payment-service'; Max = 5; Min = 1 }
 )
 
-$cpuThresholdUp = 55.0
+$cpuThresholdUp = 35.0
 $cpuThresholdDown = 15.0
 
 $statusFile = "C:\Users\xcuon\OneDrive\Desktop\fE\techwiz-frontend\public\system-status.json"
@@ -67,7 +67,7 @@ while ($true) {
             Write-Host "[$($svc.Name)] Replicas: $replicaCount | Avg CPU: $($svcStatus.avgCpu)%"
 
             if ($avgCpu -gt $cpuThresholdUp -and $replicaCount -lt $svc.Max) {
-                if ($avgCpu -gt 85.0 -and $replicaCount + 1 -lt $svc.Max) { $newCount = $replicaCount + 2 } else { $newCount = $replicaCount + 1 }
+                if ($avgCpu -gt 85.0 -and $replicaCount + 2 -lt $svc.Max) { $newCount = $replicaCount + 3 } elseif ($avgCpu -gt 60.0 -and $replicaCount + 1 -lt $svc.Max) { $newCount = $replicaCount + 2 } else { $newCount = $replicaCount + 1 }
                 $svcStatus.status = "SCALING_UP"
                 Write-Host ">>> ALERT: High CPU detected on $($svc.Name)! Scaling UP to $newCount replicas..." -ForegroundColor Red
                 $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
