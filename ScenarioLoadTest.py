@@ -4,10 +4,11 @@ import time
 
 KONG_URL = 'http://localhost:8080/api/v1'
 
-def stress(endpoint, duration_sec, concurrent):
+def stress(service_name, endpoint, user_count, duration_sec, concurrent):
     url = f"{KONG_URL}/{endpoint}"
-    print(f"\n[PHASE] {endpoint} | Target: {url}")
-    print(f"Holding load for {duration_sec} seconds (Concurrency: {concurrent})...")
+    print(f"\n=========================================")
+    print(f"[SCENARIO] Simulating {user_count} Users accessing {service_name}...")
+    print(f"=========================================")
     
     success = 0
     failed = 0
@@ -32,11 +33,10 @@ def stress(endpoint, duration_sec, concurrent):
         t.start()
         threads.append(t)
         
-    # Wait for the duration, printing progress
     start_time = time.time()
+    # No more elapsed time printing, just static message
+    print("  -> Traffic is at peak! CPU should spike instantly...")
     while time.time() - start_time < duration_sec:
-        elapsed = int(time.time() - start_time)
-        print(f"  ... Running: {elapsed}s / {duration_sec}s ...", end="\r")
         time.sleep(1)
         
     running = False
@@ -44,25 +44,22 @@ def stress(endpoint, duration_sec, concurrent):
     for t in threads:
         t.join()
         
-    print(f"\n[COMPLETE] Phase {endpoint} finished! Success: {success} | Failed: {failed}")
+    print(f"\n[COMPLETE] {service_name} traffic ended. (Success: {success} | Failed: {failed})")
 
 if __name__ == '__main__':
     print("=========================================")
     print(" FANHUB MULTI-SERVICE LOAD TEST SCENARIO")
     print("=========================================")
-    print("  Customized for Real-time Auto-Scale Visualization")
     
-    # Phase 1: Event traffic (Hold for 50s so it scales to ~4-5 nodes)
-    stress("events/stress-test", 25, 40)
-    print("\n[PAUSE] Wait 15 seconds for AutoScaler to cool down & kill nodes...")
-    time.sleep(15)
+    # Increase concurrency to 80 to hit CPU instantly
+    stress("Event Service", "events/stress-test", "35,000", 20, 80)
+    print("\n[PAUSE] Wait 10 seconds for traffic to cool down...")
+    time.sleep(10)
     
-    # Phase 2: Booking traffic
-    stress("bookings/stress-test", 25, 40)
-    print("\n[PAUSE] Wait 15 seconds for AutoScaler to cool down & kill nodes...")
-    time.sleep(15)
+    stress("Booking Service", "bookings/stress-test", "22,500", 20, 80)
+    print("\n[PAUSE] Wait 10 seconds for traffic to cool down...")
+    time.sleep(10)
     
-    # Phase 3: Payment traffic
-    stress("payments/stress-test", 25, 40)
+    stress("Payment Service", "payments/stress-test", "18,200", 20, 80)
     
     print("\n=== ALL SCENARIOS COMPLETED ===")
