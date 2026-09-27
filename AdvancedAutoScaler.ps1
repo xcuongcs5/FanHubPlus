@@ -22,7 +22,15 @@ Write-Host "Scale DOWN at < $cpuThresholdDown% CPU`n"
 $totalRequests = 100
 $activeUsers = 12
 
+
+$lastScaleTime = @{
+    "event-service" = (Get-Date).AddMinutes(-1)
+    "booking-service" = (Get-Date).AddMinutes(-1)
+    "payment-service" = (Get-Date).AddMinutes(-1)
+}
+
 while ($true) {
+
     $systemStatus = @{
         activeUsers = $activeUsers
         totalRequests = $totalRequests
@@ -66,8 +74,33 @@ while ($true) {
 
             Write-Host "[$($svc.Name)] Replicas: $replicaCount | Avg CPU: $($svcStatus.avgCpu)%"
 
-            if ($avgCpu -gt $cpuThresholdUp -and $replicaCount -lt $svc.Max) {
-                if ($avgCpu -gt 85.0 -and $replicaCount + 2 -lt $svc.Max) { $newCount = $replicaCount + 3 } elseif ($avgCpu -gt 60.0 -and $replicaCount + 1 -lt $svc.Max) { $newCount = $replicaCount + 2 } else { $newCount = $replicaCount + 1 }
+            
+            $timeSinceLastScale = ((Get-Date) - $lastScaleTime[$svc.Name]).TotalSeconds
+            
+            if ($timeSinceLastScale -lt 8) {
+                $svcStatus.status = "SCALING_IN_PROGRESS"
+            } else {
+                if ($avgCpu -gt $cpuThresholdUp -and $replicaCount -lt $svc.Max) {
+                    if ($avgCpu -gt 85.0 -and $replicaCount + 2 -lt $svc.Max) { $newCount = $replicaCount + 3 } elseif ($avgCpu -gt 60.0 -and $replicaCount + 1 -lt $svc.Max) { $newCount = $replicaCount + 2 } else { $newCount = $replicaCount + 1 }
+                    $svcStatus.status = "SCALING_UP"
+                    $lastScaleTime[$svc.Name] = Get-Date
+                    Write-Host ">>> ALERT: High CPU detected on $($svc.Name)! Scaling UP to $newCount replicas..." -ForegroundColor Red
+                    $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
+                    Start-Process -FilePath "docker" -ArgumentList $args -NoNewWindow
+                }
+                elseif ($avgCpu -lt $cpuThresholdDown -and $replicaCount -gt $svc.Min) {
+                    $newCount = $replicaCount - 1
+                    $svcStatus.status = "SCALING_DOWN"
+                    $lastScaleTime[$svc.Name] = Get-Date
+                    Write-Host "<<< INFO: Low CPU on $($svc.Name). Scaling DOWN to $newCount replicas..." -ForegroundColor Green
+                    $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
+                    Start-Process -FilePath "docker" -ArgumentList $args -NoNewWindow
+                }
+                elseif ($avgCpu -gt 50) {
+                    $svcStatus.status = "HIGH_LOAD"
+                }
+            }
+ elseif ($avgCpu -gt 60.0 -and $replicaCount + 1 -lt $svc.Max) { $newCount = $replicaCount + 2 } else { $newCount = $replicaCount + 1 }
                 $svcStatus.status = "SCALING_UP"
                 Write-Host ">>> ALERT: High CPU detected on $($svc.Name)! Scaling UP to $newCount replicas..." -ForegroundColor Red
                 $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
