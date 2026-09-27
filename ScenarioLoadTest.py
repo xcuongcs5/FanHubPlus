@@ -1,4 +1,6 @@
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import threading
 import time
 import json
@@ -9,6 +11,23 @@ KONG_URL = 'http://localhost:8080/api/v1'
 TELEMETRY_FILE = 'loadtest-telemetry.json'
 
 total_requests_global = 0
+
+def create_session(pool_size=60):
+    session = requests.Session()
+    retries = Retry(
+        total=3,
+        backoff_factor=0.1,
+        status_forcelist=[502, 503, 504],
+        raise_on_status=False
+    )
+    adapter = HTTPAdapter(
+        pool_connections=pool_size,
+        pool_maxsize=pool_size,
+        max_retries=retries
+    )
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
 
 def update_telemetry(active_users, total_reqs, hotspot):
     data = {
@@ -31,6 +50,7 @@ def stress(service_name, service_key, endpoint, user_count, duration_sec, concur
     print(f"[SCENARIO] Simulating {user_count} Users accessing {service_name}...")
     print(f"=======================================================")
     
+    session = create_session(concurrent)
     success = 0
     failed = 0
     running = True
@@ -41,7 +61,7 @@ def stress(service_name, service_key, endpoint, user_count, duration_sec, concur
         global total_requests_global
         while running:
             try:
-                res = requests.get(url, timeout=5)
+                res = session.get(url, timeout=4)
                 with lock:
                     total_requests_global += 1
                     if res.status_code == 200:
@@ -52,6 +72,8 @@ def stress(service_name, service_key, endpoint, user_count, duration_sec, concur
                 with lock:
                     total_requests_global += 1
                     failed += 1
+            # Small 8ms breath to prevent socket exhaustion while maintaining high CPU
+            time.sleep(0.008)
 
     threads = []
     for _ in range(concurrent):
@@ -78,31 +100,33 @@ def stress(service_name, service_key, endpoint, user_count, duration_sec, concur
     for t in threads:
         t.join()
         
-    print(f"\n[COMPLETE] {service_name} phase finished! Sent: {success + failed:,} reqs (Success: {success:,} | Failed: {failed})")
+    total_phase = success + failed
+    rate = (success / total_phase * 100) if total_phase > 0 else 0
+    print(f"\n[COMPLETE] {service_name} finished! Sent: {total_phase:,} reqs | Success: {success:,} | Failed: {failed} | Success Rate: {rate:.1f}%")
 
 if __name__ == '__main__':
     print("=======================================================")
     print(" FANHUB REAL-TIME DYNAMIC LOAD TEST SCENARIO")
-    print(" (Real-time telemetry synchronized with Admin Frontend)")
+    print(" (High-Reliability Connection Pooling with Live Sync)")
     print("=======================================================")
     
     # Initialize telemetry
     update_telemetry(0, 0, "")
     
     # Phase 1: Event Service
-    stress("Event Service", "event-service", "events/stress-test", "35,000", 22, 80)
+    stress("Event Service", "event-service", "events/stress-test", "35,000", 22, 60)
     print("\n[COOLDOWN] Pausing 8 seconds (Simulating user transition to Booking)...")
     update_telemetry(0, total_requests_global, "")
     time.sleep(8)
     
     # Phase 2: Booking Service
-    stress("Booking Service", "booking-service", "bookings/stress-test", "22,500", 22, 80)
+    stress("Booking Service", "booking-service", "bookings/stress-test", "22,500", 22, 60)
     print("\n[COOLDOWN] Pausing 8 seconds (Simulating user transition to Payment)...")
     update_telemetry(0, total_requests_global, "")
     time.sleep(8)
     
     # Phase 3: Payment Service
-    stress("Payment Service", "payment-service", "payments/stress-test", "18,200", 22, 80)
+    stress("Payment Service", "payment-service", "payments/stress-test", "18,200", 22, 60)
     update_telemetry(0, total_requests_global, "")
     
     print("\n=======================================================")
