@@ -36,7 +36,6 @@ def create_session(pool_size=60):
     return session
 
 def sync_live_status(active_users, total_reqs, hotspot, endpoint="", rps=0):
-    # 1. Update loadtest-telemetry.json for AutoScaler
     telemetry_data = {
         "activeUsers": active_users,
         "totalRequests": total_reqs,
@@ -53,7 +52,6 @@ def sync_live_status(active_users, total_reqs, hotspot, endpoint="", rps=0):
     except Exception:
         pass
 
-    # 2. Update frontend system-status.json DIRECTLY for sub-second real-time sync
     try:
         if os.path.exists(STATUS_FILE):
             with open(STATUS_FILE, "r", encoding="utf-8") as f:
@@ -65,16 +63,18 @@ def sync_live_status(active_users, total_reqs, hotspot, endpoint="", rps=0):
             data["activeEndpoint"] = endpoint
             data["requestsPerSec"] = rps
             
-            if "services" in data and hotspot in data["services"]:
-                svc_data = data["services"][hotspot]
-                svc_data["totalRequests"] = service_requests.get(hotspot, 0)
-                svc_data["rps"] = rps
-                # Distribute requests proportionally to running nodes
-                nodes = svc_data.get("nodes", [])
-                if nodes:
-                    per_node = service_requests.get(hotspot, 0) // len(nodes)
-                    for n in nodes:
-                        n["requests"] = per_node
+            if "services" in data:
+                for s_key in ["event-service", "booking-service", "payment-service"]:
+                    if s_key in data["services"]:
+                        s_data = data["services"][s_key]
+                        live_val = service_requests.get(s_key, 0)
+                        s_data["totalRequests"] = live_val
+                        s_data["rps"] = rps if s_key == hotspot else 0
+                        nodes = s_data.get("nodes", [])
+                        if nodes:
+                            per_n = live_val // len(nodes)
+                            for n in nodes:
+                                n["requests"] = per_n
             
             tmp_status = STATUS_FILE + ".tmp"
             with open(tmp_status, "w", encoding="utf-8") as f:
@@ -87,6 +87,10 @@ def stress(short_name, service_key, endpoint, duration_sec, concurrent):
     global total_requests_global, service_requests
     url = f"{KONG_URL}/{endpoint}"
     full_path = f"/api/v1/{endpoint}"
+    
+    # Reset other services so only the ACTIVE service displays live incoming traffic!
+    for k in service_requests:
+        service_requests[k] = 0
     
     print(f"\n--- [TARGET: {short_name.upper()}] ({full_path}) ---")
     
@@ -135,14 +139,12 @@ def stress(short_name, service_key, endpoint, duration_sec, concurrent):
             current_svc_total = service_requests[service_key]
         
         if time_diff >= 0.4:
-            current_rps = int((current_total - last_count) / time_diff)
-            last_count = current_total
+            current_rps = int((current_svc_total - last_count) / time_diff)
+            last_count = current_svc_total
             last_time = now
         
-        # Real-time sub-second sync to frontend and autoscaler
         sync_live_status(concurrent, current_total, service_key, full_path, current_rps)
         
-        # COMPACT SINGLE-LINE OUTPUT (< 52 chars, fits perfectly in half-screen!)
         line = f"\r>>> [{concurrent}u] {short_name}: {current_svc_total:,} | {current_rps} r/s | All: {current_total:,}   "
         sys.stdout.write(line)
         sys.stdout.flush()
@@ -157,27 +159,39 @@ def stress(short_name, service_key, endpoint, duration_sec, concurrent):
 
 if __name__ == '__main__':
     print("==================================================")
-    print(" FANHUB TRAFFIC GENERATOR (Split-Screen Optimized)")
+    print(" FANHUB TRAFFIC GENERATOR (Real-Time Live State)")
     print("==================================================")
     
+    # Start clean: 0 users, 0 reqs
     sync_live_status(0, 0, "")
     
     # Phase 1: Event
     stress("Event", "event-service", "events/stress-test", 22, 60)
-    print("... Cool down (8s) -> Moving to Booking ...")
+    print("... Traffic cleared (8s) -> Moving to Booking ...")
+    service_requests["event-service"] = 0
     sync_live_status(0, total_requests_global, "", "", 0)
     time.sleep(8)
     
     # Phase 2: Booking
     stress("Booking", "booking-service", "bookings/stress-test", 22, 60)
-    print("... Cool down (8s) -> Moving to Payment ...")
+    print("... Traffic cleared (8s) -> Moving to Payment ...")
+    service_requests["booking-service"] = 0
     sync_live_status(0, total_requests_global, "", "", 0)
     time.sleep(8)
     
     # Phase 3: Payment
     stress("Payment", "payment-service", "payments/stress-test", 22, 60)
-    sync_live_status(0, total_requests_global, "", "", 0)
+    service_requests["payment-service"] = 0
     
     print("\n" + "="*50)
     print(f" ALL DONE! Total Requests: {total_requests_global:,}")
+    print(" System returning to clean IDLE state...")
     print("="*50 + "\n")
+    
+    # Reset all live metrics back to 0 cleanly!
+    sync_live_status(0, 0, "", "", 0)
+    if os.path.exists(TELEMETRY_FILE):
+        try:
+            os.remove(TELEMETRY_FILE)
+        except Exception:
+            pass
