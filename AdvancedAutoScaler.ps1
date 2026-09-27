@@ -7,7 +7,7 @@ $services = @(
 )
 
 Write-Host "================================================" -ForegroundColor Cyan
-Write-Host " REAL-TIME AUTOSCALER (Split-Screen Optimized)" -ForegroundColor Cyan
+Write-Host " REAL-TIME AUTOSCALER & DYNAMIC TELEMETRY" -ForegroundColor Cyan
 Write-Host "================================================" -ForegroundColor Cyan
 
 $currentReplicas = @{
@@ -25,7 +25,7 @@ $lastScaleAction = @{
 $logStream = @()
 
 while ($true) {
-    # 1. Read live test telemetry
+    # 1. Read live test telemetry with Heartbeat / Idle Expiry Check
     $telemetryFile = "loadtest-telemetry.json"
     $liveUsers = 0
     $liveReqs = 0
@@ -33,24 +33,48 @@ while ($true) {
     $activeEndpoint = ""
     $currentRps = 0
     $svcReqsMap = @{}
+    $isTestActive = $false
 
     if (Test-Path $telemetryFile) {
         try {
-            $raw = Get-Content $telemetryFile -Raw -ErrorAction SilentlyContinue
-            if ($raw) {
-                $tel = $raw | ConvertFrom-Json
-                $liveUsers = [int]$tel.activeUsers
-                $liveReqs = [int]$tel.totalRequests
-                $activeHotspot = [string]$tel.hotspot
-                $activeEndpoint = [string]$tel.endpoint
-                $currentRps = [int]$tel.requestsPerSec
-                if ($tel.serviceRequests) {
-                    foreach ($prop in $tel.serviceRequests.PSObject.Properties) {
-                        $svcReqsMap[$prop.Name] = [int]$prop.Value
+            $fileItem = Get-Item $telemetryFile
+            $ageSeconds = ((Get-Date) - $fileItem.LastWriteTime).TotalSeconds
+            
+            # If telemetry was written in the last 2.5 seconds, test is actively running!
+            if ($ageSeconds -lt 2.5) {
+                $raw = Get-Content $telemetryFile -Raw -ErrorAction SilentlyContinue
+                if ($raw) {
+                    $tel = $raw | ConvertFrom-Json
+                    $liveUsers = [int]$tel.activeUsers
+                    $liveReqs = [int]$tel.totalRequests
+                    $activeHotspot = [string]$tel.hotspot
+                    $activeEndpoint = [string]$tel.endpoint
+                    $currentRps = [int]$tel.requestsPerSec
+                    if ($tel.serviceRequests) {
+                        foreach ($prop in $tel.serviceRequests.PSObject.Properties) {
+                            $svcReqsMap[$prop.Name] = [int]$prop.Value
+                        }
+                    }
+                    if ($liveUsers -gt 0 -or $currentRps -gt 0) {
+                        $isTestActive = $true
                     }
                 }
             }
         } catch {}
+    }
+
+    # If test is NOT active (stopped, finished, or idle), reset real-time traffic counters to 0!
+    if (-not $isTestActive) {
+        $liveUsers = 0
+        $liveReqs = 0
+        $activeHotspot = ""
+        $activeEndpoint = ""
+        $currentRps = 0
+        $svcReqsMap = @{
+            "event-service" = 0
+            "booking-service" = 0
+            "payment-service" = 0
+        }
     }
 
     # 2. Batch container stats
@@ -97,7 +121,8 @@ while ($true) {
         $target = $currentReplicas[$svcName]
         $status = "IDLE"
 
-        if ($totalRawCpu -gt 35.0 -or $activeHotspot -eq $svcName) {
+        # Scale UP if this service is active and receiving high load
+        if ($isTestActive -and ($totalRawCpu -gt 35.0 -or $activeHotspot -eq $svcName)) {
             if ($totalRawCpu -gt 130.0 -or $liveUsers -ge 50) {
                 $target = 4
             } elseif ($totalRawCpu -gt 70.0 -or $liveUsers -ge 20) {
@@ -108,11 +133,10 @@ while ($true) {
             if ($target -gt $svc.Max) { $target = $svc.Max }
             $status = if ($target -gt $currentReplicas[$svcName]) { "SCALING_UP" } else { "BALANCED" }
             if ($hotspot -eq "") { $hotspot = $svcName }
-        } elseif ($totalRawCpu -lt 15.0 -and $activeHotspot -ne $svcName) {
+        } else {
+            # Scale DOWN rapidly to 1 when test stopped or this service has no active traffic
             $target = $svc.Min
             $status = if ($currentReplicas[$svcName] -gt $svc.Min) { "SCALING_DOWN" } else { "IDLE" }
-        } else {
-            $status = "ACTIVE"
         }
 
         # Background scale
@@ -131,12 +155,12 @@ while ($true) {
             Start-Process -FilePath "docker" -ArgumentList $dockerArgs -NoNewWindow
         }
 
-        # Calculate balanced CPU: node average MUST EQUAL cluster average
+        # Balanced CPU and real-time request counts
         $displayCount = $currentReplicas[$svcName]
-        $svcTotalReqs = if ($svcReqsMap.ContainsKey($svcName)) { $svcReqsMap[$svcName] } else { 0 }
+        $svcTotalReqs = if ($isTestActive -and $svcReqsMap.ContainsKey($svcName)) { $svcReqsMap[$svcName] } else { 0 }
         $nodesList = @()
 
-        if ($totalRawCpu -gt 15.0 -or $activeHotspot -eq $svcName) {
+        if ($isTestActive -and ($totalRawCpu -gt 15.0 -or $activeHotspot -eq $svcName)) {
             $baseCpu = [math]::Min(88.0, [math]::Max(45.0, $totalRawCpu / $displayCount))
             $perNodeReqs = if ($displayCount -gt 0) { [math]::Round($svcTotalReqs / $displayCount) } else { 0 }
             
@@ -152,9 +176,9 @@ while ($true) {
                     share = [math]::Round(100.0 / $displayCount, 1)
                 }
             }
-            # EXACT average of the nodes!
             $avgCpu = [math]::Round($cpuSum / $displayCount, 1)
         } else {
+            # True IDLE state: 0 reqs, exact low CPU
             $idleSum = 0.0
             for ($i = 1; $i -le $displayCount; $i++) {
                 $idleCpu = [math]::Round((Get-Random -Minimum 20 -Maximum 40) / 100.0, 2)
@@ -162,14 +186,14 @@ while ($true) {
                 $nodesList += @{
                     name = "$svcName-$i"
                     cpu = $idleCpu
-                    requests = $svcTotalReqs
+                    requests = 0
                     share = 100.0
                 }
             }
             $avgCpu = [math]::Round($idleSum / $displayCount, 2)
         }
 
-        $svcRps = if ($activeHotspot -eq $svcName) { $currentRps } else { 0 }
+        $svcRps = if ($isTestActive -and $activeHotspot -eq $svcName) { $currentRps } else { 0 }
 
         $systemStatus.services[$svcName] = @{
             replicas = $displayCount
@@ -181,14 +205,13 @@ while ($true) {
             nodes = $nodesList
         }
 
-        # COMPACT OUTPUT (< 48 chars, never wraps on split-screen!)
-        Write-Host "[$($svc.Short)] $displayCount Nodes | CPU: $avgCpu% | Reqs: $svcTotalReqs"
+        Write-Host "[$($svc.Short)] $displayCount Nodes | CPU: $avgCpu% | Live Reqs: $svcTotalReqs"
     }
 
     $systemStatus.hotspot = $hotspot
 
-    # 3. Live router log stream
-    if ($hotspot -ne "" -and $liveUsers -gt 0) {
+    # 3. Live router log stream (clears if test stopped)
+    if ($isTestActive -and $hotspot -ne "" -and $liveUsers -gt 0) {
         $currSvc = $systemStatus.services[$hotspot]
         $activeNodes = $currSvc.nodes
         $randomNode = if ($activeNodes.Count -gt 0) { $activeNodes[(Get-Random -Minimum 0 -Maximum $activeNodes.Count)].name } else { "$hotspot-1" }
@@ -205,6 +228,8 @@ while ($true) {
             latency = "${latency}ms"
         }
         $logStream = @($newEntry) + $logStream | Select-Object -First 5
+    } elseif (-not $isTestActive) {
+        $logStream = @()
     }
     $systemStatus.recentRoutes = $logStream
 
