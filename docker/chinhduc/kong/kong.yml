@@ -26,11 +26,6 @@ services:
         paths:
           - /api/v1/bookings
         strip_path: false
-    plugins:
-      - name: rate-limiting
-        config:
-          second: 10
-          policy: local
 
   - name: payment-service
     url: http://payment-service:8080
