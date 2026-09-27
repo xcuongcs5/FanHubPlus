@@ -4,66 +4,65 @@ import time
 
 KONG_URL = 'http://localhost:8080/api/v1'
 
-def stress(endpoint, count, concurrent):
+def stress(endpoint, duration_sec, concurrent):
     url = f"{KONG_URL}/{endpoint}"
-    print(f"\nðŸš€ Phase: {endpoint} | Target: {url}")
-    print(f"Sending {count} requests (Concurrency: {concurrent})...")
+    print(f"\n[PHASE] {endpoint} | Target: {url}")
+    print(f"Holding load for {duration_sec} seconds (Concurrency: {concurrent})...")
     
     success = 0
     failed = 0
-    lock = threading.Lock()
+    running = True
     
     def worker():
         nonlocal success, failed
-        while True:
-            with lock:
-                if count_arr[0] <= 0:
-                    break
-                count_arr[0] -= 1
+        while running:
             try:
-                # We expect a JSON response from our stress-test endpoint
                 res = requests.get(url, timeout=10)
                 if res.status_code == 200:
-                    with lock:
-                        success += 1
+                    success += 1
                 else:
-                    with lock:
-                        failed += 1
-            except Exception as e:
-                with lock:
                     failed += 1
+            except Exception:
+                failed += 1
 
-    count_arr = [count]
     threads = []
     
-    start_time = time.time()
     for _ in range(concurrent):
         t = threading.Thread(target=worker)
         t.start()
         threads.append(t)
         
+    # Wait for the duration, printing progress
+    start_time = time.time()
+    while time.time() - start_time < duration_sec:
+        elapsed = int(time.time() - start_time)
+        print(f"  ... Running: {elapsed}s / {duration_sec}s ...", end="\r")
+        time.sleep(1)
+        
+    running = False
+    
     for t in threads:
         t.join()
         
-    duration = time.time() - start_time
-    print(f"âœ… Phase Complete! Time: {duration:.2f}s | Success: {success} | Failed: {failed}")
+    print(f"\n[COMPLETE] Phase {endpoint} finished! Success: {success} | Failed: {failed}")
 
 if __name__ == '__main__':
     print("=========================================")
     print(" FANHUB MULTI-SERVICE LOAD TEST SCENARIO")
     print("=========================================")
+    print("  Customized for Real-time Auto-Scale Visualization")
     
-    # Phase 1: 1000 users access the event
-    stress("events/stress-test", 1000, 20)
-    print("Sleeping for 10 seconds to allow AutoScaler to scale DOWN...")
-    time.sleep(10)
+    # Phase 1: Event traffic (Hold for 50s so it scales to ~4-5 nodes)
+    stress("events/stress-test", 50, 40)
+    print("\n[PAUSE] Wait 15 seconds for AutoScaler to cool down & kill nodes...")
+    time.sleep(15)
     
-    # Phase 2: 600 users proceed to booking
-    stress("bookings/stress-test", 600, 20)
-    print("Sleeping for 10 seconds to allow AutoScaler to scale DOWN...")
-    time.sleep(10)
+    # Phase 2: Booking traffic
+    stress("bookings/stress-test", 50, 40)
+    print("\n[PAUSE] Wait 15 seconds for AutoScaler to cool down & kill nodes...")
+    time.sleep(15)
     
-    # Phase 3: 500 users proceed to payment (with spike of 50 concurrent)
-    stress("payments/stress-test", 500, 50)
+    # Phase 3: Payment traffic
+    stress("payments/stress-test", 50, 40)
     
-    print("\nðŸŽ‰ ALL PHASES COMPLETED!")
+    print("\n=== ALL SCENARIOS COMPLETED ===")

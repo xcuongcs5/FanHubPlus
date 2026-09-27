@@ -9,8 +9,8 @@ $services = @(
     @{ Name = 'payment-service'; Prefix = 'fanhub-chinhduc-payment-service'; Max = 5; Min = 1 }
 )
 
-$cpuThresholdUp = 80.0
-$cpuThresholdDown = 20.0
+$cpuThresholdUp = 55.0
+$cpuThresholdDown = 15.0
 
 $statusFile = "C:\Users\xcuon\OneDrive\Desktop\fE\techwiz-frontend\public\system-status.json"
 
@@ -103,6 +103,6 @@ while ($true) {
     $systemStatus.totalRequests = $totalRequests
 
     $systemStatus | ConvertTo-Json -Depth 5 | Out-File -FilePath $statusFile -Encoding utf8
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 1
     Write-Host "----------------------------------" -ForegroundColor DarkGray
 }
