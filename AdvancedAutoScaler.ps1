@@ -154,18 +154,26 @@ while ($true) {
         Write-Host "[$svcName] Nodes: $displayCount | Avg CPU: $avgCpu% | Status: $status"
     }
 
-    $systemStatus.hotspot = $hotspot
-
-    # Dynamic metrics on top bar
-    if ($hotspot -ne "") {
-        $activeUsers = [math]::Min(450, $activeUsers + (Get-Random -Minimum 25 -Maximum 70))
-        $totalRequests += (Get-Random -Minimum 80 -Maximum 250)
-    } else {
-        $activeUsers = [math]::Max(12, $activeUsers - (Get-Random -Minimum 10 -Maximum 30))
-        $totalRequests += (Get-Random -Minimum 2 -Maximum 8)
+    $telemetryFile = "loadtest-telemetry.json"
+    $liveUsers = 0
+    $liveReqs = 0
+    if (Test-Path $telemetryFile) {
+        try {
+            $raw = Get-Content $telemetryFile -Raw -ErrorAction SilentlyContinue
+            if ($raw) {
+                $tel = $raw | ConvertFrom-Json
+                $liveUsers = [int]$tel.activeUsers
+                $liveReqs = [int]$tel.totalRequests
+                if ($tel.hotspot -and $tel.hotspot -ne "") {
+                    $hotspot = [string]$tel.hotspot
+                }
+            }
+        } catch {}
     }
-    $systemStatus.activeUsers = $activeUsers
-    $systemStatus.totalRequests = $totalRequests
+
+    $systemStatus.hotspot = $hotspot
+    $systemStatus.activeUsers = $liveUsers
+    $systemStatus.totalRequests = $liveReqs
 
     # Write out telemetry instantly
     $jsonContent = $systemStatus | ConvertTo-Json -Depth 5
