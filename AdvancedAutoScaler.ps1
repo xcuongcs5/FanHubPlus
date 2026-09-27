@@ -67,7 +67,7 @@ while ($true) {
             Write-Host "[$($svc.Name)] Replicas: $replicaCount | Avg CPU: $($svcStatus.avgCpu)%"
 
             if ($avgCpu -gt $cpuThresholdUp -and $replicaCount -lt $svc.Max) {
-                $newCount = $replicaCount + 1
+                if ($avgCpu -gt 85.0 -and $replicaCount + 1 -lt $svc.Max) { $newCount = $replicaCount + 2 } else { $newCount = $replicaCount + 1 }
                 $svcStatus.status = "SCALING_UP"
                 Write-Host ">>> ALERT: High CPU detected on $($svc.Name)! Scaling UP to $newCount replicas..." -ForegroundColor Red
                 $args = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$($svc.Name).yml up -d --scale $($svc.Name)=$newCount --no-recreate"
