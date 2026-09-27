@@ -53,16 +53,16 @@ if __name__ == '__main__':
     print("  Customized for Real-time Auto-Scale Visualization")
     
     # Phase 1: Event traffic (Hold for 50s so it scales to ~4-5 nodes)
-    stress("events/stress-test", 50, 40)
+    stress("events/stress-test", 25, 40)
     print("\n[PAUSE] Wait 15 seconds for AutoScaler to cool down & kill nodes...")
     time.sleep(15)
     
     # Phase 2: Booking traffic
-    stress("bookings/stress-test", 50, 40)
+    stress("bookings/stress-test", 25, 40)
     print("\n[PAUSE] Wait 15 seconds for AutoScaler to cool down & kill nodes...")
     time.sleep(15)
     
     # Phase 3: Payment traffic
-    stress("payments/stress-test", 50, 40)
+    stress("payments/stress-test", 25, 40)
     
     print("\n=== ALL SCENARIOS COMPLETED ===")
