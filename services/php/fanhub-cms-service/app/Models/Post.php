@@ -25,6 +25,9 @@ class Post extends Model
         'title',
         'body',
         'status',
+        'is_featured',
+        'is_pinned',
+        'reject_reason',
         'likes_count',
         'comments_count',
     ];
@@ -37,8 +40,8 @@ class Post extends Model
     {
         static::creating(function (Post $post) {
             if (empty($post->id)) {
-                // Tự sinh ID dạng req_xxx như trong tài liệu đặc tả API
-                $post->id = 'req_' . Str::lower(Str::random(12));
+                // Tự sinh ID dạng cnt_xxx cho cms_contents hoặc req_xxx
+                $post->id = 'cnt_' . Str::lower(Str::random(12));
             }
 
             if (empty($post->status)) {
@@ -76,4 +79,37 @@ class Post extends Model
         return $this->hasMany(ReactionBookmark::class, 'target_id')
             ->where('target_type', 'content');
     }
+
+    /**
+     * Quan hệ tới Media Assets
+     */
+    public function media(): HasMany
+    {
+        return $this->hasMany(MediaAsset::class, 'content_id');
+    }
+
+    /**
+     * Quan hệ tới Author (UserProjection)
+     */
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(UserProjection::class, 'user_id');
+    }
+
+    /**
+     * Quan hệ tới Comments
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class, 'target_id');
+    }
+
+    /**
+     * Quan hệ tới Tags
+     */
+    public function tags()
+    {
+        return $this->belongsToMany(Tag::class, 'cms_content_tags', 'content_id', 'tag_id');
+    }
 }
+
