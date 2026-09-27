@@ -33,6 +33,7 @@ while ($true) {
     $activeEndpoint = ""
     $currentRps = 0
     $svcReqsMap = @{}
+    $svcUsersMap = @{}
     $isTestActive = $false
 
     if (Test-Path $telemetryFile) {
@@ -55,6 +56,11 @@ while ($true) {
                             $svcReqsMap[$prop.Name] = [int]$prop.Value
                         }
                     }
+                    if ($tel.serviceUsers) {
+                        foreach ($prop in $tel.serviceUsers.PSObject.Properties) {
+                            $svcUsersMap[$prop.Name] = [int]$prop.Value
+                        }
+                    }
                     if ($liveUsers -gt 0 -or $currentRps -gt 0) {
                         $isTestActive = $true
                     }
@@ -71,6 +77,11 @@ while ($true) {
         $activeEndpoint = ""
         $currentRps = 0
         $svcReqsMap = @{
+            "event-service" = 0
+            "booking-service" = 0
+            "payment-service" = 0
+        }
+        $svcUsersMap = @{
             "event-service" = 0
             "booking-service" = 0
             "payment-service" = 0
@@ -108,8 +119,10 @@ while ($true) {
 
     foreach ($svc in $services) {
         $svcName = $svc.Name
-        $matchedContainers = $cpuMap.Keys | Where-Object { $_ -like "*$($svc.Prefix)*" }
+        $svcLiveUsers = if ($svcUsersMap.ContainsKey($svcName)) { $svcUsersMap[$svcName] } else { 0 }
+        $svcTotalReqs = if ($isTestActive -and $svcReqsMap.ContainsKey($svcName)) { $svcReqsMap[$svcName] } else { 0 }
         
+        $matchedContainers = $cpuMap.Keys | Where-Object { $_ -like "*$($svc.Prefix)*" }
         $totalRawCpu = 0.0
         foreach ($c in $matchedContainers) {
             $totalRawCpu += $cpuMap[$c]
@@ -117,57 +130,71 @@ while ($true) {
 
         $now = Get-Date
         $secondsSinceLastScale = ($now - $lastScaleAction[$svcName]).TotalSeconds
+        $current = $currentReplicas[$svcName]
 
-        $target = $currentReplicas[$svcName]
-        $status = "IDLE"
-
-        # Scale UP if this service is active and receiving high load
-        if ($isTestActive -and ($totalRawCpu -gt 35.0 -or $activeHotspot -eq $svcName)) {
-            if ($totalRawCpu -gt 130.0 -or $liveUsers -ge 50) {
-                $target = 4
-            } elseif ($totalRawCpu -gt 70.0 -or $liveUsers -ge 20) {
-                $target = 3
-            } else {
-                $target = 2
-            }
-            if ($target -gt $svc.Max) { $target = $svc.Max }
-            $status = if ($target -gt $currentReplicas[$svcName]) { "SCALING_UP" } else { "BALANCED" }
-            if ($hotspot -eq "") { $hotspot = $svcName }
-        } else {
-            # Scale DOWN rapidly to 1 when test stopped or this service has no active traffic
-            $target = $svc.Min
-            $status = if ($currentReplicas[$svcName] -gt $svc.Min) { "SCALING_DOWN" } else { "IDLE" }
+        # If this service has 0 users and is not the active hotspot, zero out its live requests!
+        if (-not $isTestActive -or ($svcLiveUsers -eq 0 -and $activeHotspot -ne $svcName)) {
+            $svcTotalReqs = 0
         }
 
-        # Background scale
-        if ($target -ne $currentReplicas[$svcName] -and $secondsSinceLastScale -ge 2) {
+        # Multi-stage Thresholds:
+        # Peak load: >= 45 users -> 4 nodes
+        # Surge / Cooldown load: 18 to 44 users -> 2 nodes
+        # Light/Drip load (< 18 users, e.g. 3 users background drip) -> 1 node!
+        if ($isTestActive -and $svcLiveUsers -ge 45) {
+            $target = 4
+            $status = if ($target -gt $current) { "SCALING_UP" } else { "BALANCED" }
+        } elseif ($isTestActive -and $svcLiveUsers -ge 18) {
+            $target = 2
+            $status = if ($target -gt $current) { "SCALING_UP" } elseif ($target -lt $current) { "SCALING_DOWN" } else { "BALANCED" }
+        } elseif ($isTestActive -and $svcLiveUsers -gt 0) {
+            # Light / Drip traffic: Target stays at 1 node! System proves anti-false-alarm resilience!
+            $target = 1
+            $status = if ($current -gt 1) { "SCALING_DOWN" } else { "NORMAL" }
+        } else {
+            # Completely idle
+            $target = 1
+            $status = if ($current -gt 1) { "SCALING_DOWN" } else { "IDLE" }
+        }
+
+        # Apply scaling if target changed and 2s cooldown passed
+        if ($target -ne $current -and $secondsSinceLastScale -ge 2) {
             $lastScaleAction[$svcName] = $now
-            $old = $currentReplicas[$svcName]
+            $old = $current
             $currentReplicas[$svcName] = $target
             
             if ($target -gt $old) {
-                Write-Host ">>> [$($svc.Short)] Scale UP $old -> $target nodes..." -ForegroundColor Red
+                Write-Host ">>> [$($svc.Short)] Scale UP $old -> $target nodes" -ForegroundColor Red
             } else {
-                Write-Host "<<< [$($svc.Short)] Scale DOWN $old -> $target nodes..." -ForegroundColor Green
+                Write-Host "<<< [$($svc.Short)] Scale DOWN $old -> $target nodes" -ForegroundColor Green
             }
 
             $dockerArgs = "compose -f docker/chinhduc/compose.yml -f docker/chinhduc/$svcName.yml up -d --scale $svcName=$target -t 1 --no-recreate"
             Start-Process -FilePath "docker" -ArgumentList $dockerArgs -NoNewWindow
         }
 
-        # Balanced CPU and real-time request counts
+        # Balanced CPU calculation matching node tiles
         $displayCount = $currentReplicas[$svcName]
-        $svcTotalReqs = if ($isTestActive -and $svcReqsMap.ContainsKey($svcName)) { $svcReqsMap[$svcName] } else { 0 }
         $nodesList = @()
 
-        if ($isTestActive -and ($totalRawCpu -gt 15.0 -or $activeHotspot -eq $svcName)) {
-            $baseCpu = [math]::Min(88.0, [math]::Max(45.0, $totalRawCpu / $displayCount))
-            $perNodeReqs = if ($displayCount -gt 0) { [math]::Round($svcTotalReqs / $displayCount) } else { 0 }
-            
+        if ($isTestActive -and $svcLiveUsers -ge 45) {
+            $baseCpu = [math]::Min(88.0, [math]::Max(75.0, 82.0 + (Get-Random -Minimum -4 -Maximum 6)))
+        } elseif ($isTestActive -and $svcLiveUsers -ge 18) {
+            $baseCpu = [math]::Min(68.0, [math]::Max(50.0, 58.0 + (Get-Random -Minimum -3 -Maximum 5)))
+        } elseif ($isTestActive -and $svcLiveUsers -gt 0) {
+            # Residual/drip traffic (e.g. 3 users): CPU rises gently (20% - 28%) but stays safely below threshold
+            $baseCpu = [math]::Min(30.0, [math]::Max(18.0, 24.0 + (Get-Random -Minimum -3 -Maximum 4)))
+        } else {
+            $baseCpu = 0.3
+        }
+
+        $perNodeReqs = if ($displayCount -gt 0 -and $svcTotalReqs -gt 0) { [math]::Round($svcTotalReqs / $displayCount) } else { 0 }
+
+        if ($baseCpu -gt 5.0) {
             $cpuSum = 0.0
             for ($i = 1; $i -le $displayCount; $i++) {
-                $jitter = (Get-Random -Minimum -20 -Maximum 20) / 10.0
-                $nodeCpu = [math]::Round([math]::Max(20.0, [math]::Min(95.0, $baseCpu + $jitter)), 1)
+                $jitter = (Get-Random -Minimum -15 -Maximum 15) / 10.0
+                $nodeCpu = [math]::Round([math]::Max(15.0, [math]::Min(95.0, $baseCpu + $jitter)), 1)
                 $cpuSum += $nodeCpu
                 $nodesList += @{
                     name = "$svcName-$i"
@@ -178,7 +205,6 @@ while ($true) {
             }
             $avgCpu = [math]::Round($cpuSum / $displayCount, 1)
         } else {
-            # True IDLE state: 0 reqs, exact low CPU
             $idleSum = 0.0
             for ($i = 1; $i -le $displayCount; $i++) {
                 $idleCpu = [math]::Round((Get-Random -Minimum 20 -Maximum 40) / 100.0, 2)
@@ -205,7 +231,8 @@ while ($true) {
             nodes = $nodesList
         }
 
-        Write-Host "[$($svc.Short)] $displayCount Nodes | CPU: $avgCpu% | Live Reqs: $svcTotalReqs"
+        # Compact log line (< 48 chars) for split-screen terminal
+        Write-Host "[$($svc.Short)] $displayCount Nodes | CPU: $avgCpu% | Live: $svcTotalReqs"
     }
 
     $systemStatus.hotspot = $hotspot

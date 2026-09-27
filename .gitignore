@@ -32,3 +32,8 @@ Start-AllServices.ps1
 Start-NodeServices.ps1
 
 secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
