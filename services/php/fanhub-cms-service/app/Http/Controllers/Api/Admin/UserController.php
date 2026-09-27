@@ -15,7 +15,54 @@ use Illuminate\Support\Str;
 class UserController extends Controller
 {
     /**
-     * Danh sách người dùng
+     * Xác định ngữ cảnh kết nối C# Identity (ưu tiên sqlsrv, sau đó tới default)
+     * Trả về [$conn, $usersTable, $urTable, $rTable]
+     */
+    private function resolveIdentityContext(): array
+    {
+        $connections = ['sqlsrv', null];
+        foreach ($connections as $connName) {
+            try {
+                $conn = DB::connection($connName);
+                $schema = $conn->getSchemaBuilder();
+
+                $usersTable = null;
+                foreach (['Users', 'users'] as $tbl) {
+                    if ($schema->hasTable($tbl)) {
+                        $usersTable = $tbl;
+                        break;
+                    }
+                }
+
+                if ($usersTable) {
+                    $urTable = null;
+                    foreach (['UserRoles', 'user_roles'] as $tbl) {
+                        if ($schema->hasTable($tbl)) {
+                            $urTable = $tbl;
+                            break;
+                        }
+                    }
+
+                    $rTable = null;
+                    foreach (['Roles', 'roles'] as $tbl) {
+                        if ($schema->hasTable($tbl)) {
+                            $rTable = $tbl;
+                            break;
+                        }
+                    }
+
+                    return [$conn, $usersTable, $urTable, $rTable];
+                }
+            } catch (\Throwable $e) {
+                // Tiếp tục thử kết nối tiếp theo nếu không kết nối được
+            }
+        }
+
+        return [null, null, null, null];
+    }
+
+    /**
+     * Danh sách người dùng từ hệ thống C# Identity
      * GET /api/v1/admin/users?page=1&limit=20&search=nguyen&role=User&status=Active
      */
     public function index(Request $request): JsonResponse
@@ -26,51 +73,59 @@ class UserController extends Controller
         $role = $request->query('role');
         $status = $request->query('status');
 
-        $usersTable = Schema::hasTable('Users') ? 'Users' : (Schema::hasTable('users') ? 'users' : null);
+        [$conn, $usersTable, $urTable, $rTable] = $this->resolveIdentityContext();
 
-        // 1. Nếu có bảng Users chung của hệ thống C#
-        if ($usersTable) {
-            $hasUserRoles = Schema::hasTable('UserRoles') || Schema::hasTable('user_roles');
-            $hasRoles = Schema::hasTable('Roles') || Schema::hasTable('roles');
+        // 1. Nếu có bảng Users từ C# SQL Server hoặc DB chung
+        if ($conn && $usersTable) {
+            $schema = $conn->getSchemaBuilder();
+            $idCol = $schema->hasColumn($usersTable, 'Id') ? 'Id' : 'id';
+            $nameCol = $schema->hasColumn($usersTable, 'FullName') ? 'FullName' : ($schema->hasColumn($usersTable, 'full_name') ? 'full_name' : 'name');
+            $emailCol = $schema->hasColumn($usersTable, 'Email') ? 'Email' : 'email';
+            $statusCol = $schema->hasColumn($usersTable, 'Status') ? 'Status' : 'status';
+            $createdCol = $schema->hasColumn($usersTable, 'CreatedAt') ? 'CreatedAt' : 'created_at';
 
-            $query = DB::table($usersTable . ' as u');
+            $query = $conn->table($usersTable . ' as u');
 
-            if ($hasUserRoles && $hasRoles) {
-                $urTable = Schema::hasTable('UserRoles') ? 'UserRoles' : 'user_roles';
-                $rTable = Schema::hasTable('Roles') ? 'Roles' : 'roles';
-                $query->leftJoin($urTable . ' as ur', 'ur.UserId', '=', 'u.Id')
-                      ->leftJoin($rTable . ' as r', 'r.Id', '=', 'ur.RoleId')
+            if ($urTable && $rTable) {
+                $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
+                $urRoleCol = $schema->hasColumn($urTable, 'RoleId') ? 'RoleId' : 'role_id';
+                $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
+                $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+
+                $query->leftJoin($urTable . ' as ur', "ur.{$urUserCol}", '=', "u.{$idCol}")
+                      ->leftJoin($rTable . ' as r', "r.{$rIdCol}", '=', "ur.{$urRoleCol}")
                       ->select([
-                          'u.Id as id',
-                          'u.FullName as full_name',
-                          'u.Email as email',
-                          'u.Status as status',
-                          'u.CreatedAt as created_at',
-                          DB::raw('COALESCE(r.Name, "User") as role'),
+                          "u.{$idCol} as id",
+                          "u.{$nameCol} as full_name",
+                          "u.{$emailCol} as email",
+                          "u.{$statusCol} as status",
+                          "u.{$createdCol} as created_at",
+                          DB::raw("COALESCE(r.{$rNameCol}, 'User') as role"),
                       ]);
+
                 if ($role) {
-                    $query->where('r.Name', $role);
+                    $query->where("r.{$rNameCol}", $role);
                 }
             } else {
                 $query->select([
-                    'u.Id as id',
-                    'u.FullName as full_name',
-                    'u.Email as email',
-                    'u.Status as status',
-                    'u.CreatedAt as created_at',
-                    DB::raw('"User" as role'),
+                    "u.{$idCol} as id",
+                    "u.{$nameCol} as full_name",
+                    "u.{$emailCol} as email",
+                    "u.{$statusCol} as status",
+                    "u.{$createdCol} as created_at",
+                    DB::raw("'User' as role"),
                 ]);
             }
 
             if ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('u.FullName', 'like', "%{$search}%")
-                      ->orWhere('u.Email', 'like', "%{$search}%");
+                $query->where(function ($q) use ($search, $nameCol, $emailCol) {
+                    $q->where("u.{$nameCol}", 'like', "%{$search}%")
+                      ->orWhere("u.{$emailCol}", 'like', "%{$search}%");
                 });
             }
 
             if ($status) {
-                $query->whereRaw('LOWER(u.Status) = ?', [strtolower($status)]);
+                $query->whereRaw("LOWER(u.{$statusCol}) = ?", [strtolower($status)]);
             }
 
             $total = $query->count();
@@ -165,22 +220,35 @@ class UserController extends Controller
     }
 
     /**
-     * Chi tiết người dùng
+     * Chi tiết người dùng từ C# Identity
      * GET /api/v1/admin/users/{id}
      */
     public function show(string $id): JsonResponse
     {
-        $usersTable = Schema::hasTable('Users') ? 'Users' : (Schema::hasTable('users') ? 'users' : null);
+        [$conn, $usersTable, $urTable, $rTable] = $this->resolveIdentityContext();
 
-        if ($usersTable) {
-            $user = DB::table($usersTable)->where('Id', $id)->first();
+        if ($conn && $usersTable) {
+            $schema = $conn->getSchemaBuilder();
+            $idCol = $schema->hasColumn($usersTable, 'Id') ? 'Id' : 'id';
+            $nameCol = $schema->hasColumn($usersTable, 'FullName') ? 'FullName' : ($schema->hasColumn($usersTable, 'full_name') ? 'full_name' : 'name');
+            $emailCol = $schema->hasColumn($usersTable, 'Email') ? 'Email' : 'email';
+            $statusCol = $schema->hasColumn($usersTable, 'Status') ? 'Status' : 'status';
+            $phoneCol = $schema->hasColumn($usersTable, 'PhoneNumber') ? 'PhoneNumber' : ($schema->hasColumn($usersTable, 'phone_number') ? 'phone_number' : null);
+            $avatarCol = $schema->hasColumn($usersTable, 'AvatarUrl') ? 'AvatarUrl' : ($schema->hasColumn($usersTable, 'avatar_url') ? 'avatar_url' : null);
+
+            $user = $conn->table($usersTable)->where($idCol, $id)->first();
             if ($user) {
                 $roles = [];
-                if (Schema::hasTable('UserRoles') && Schema::hasTable('Roles')) {
-                    $roles = DB::table('UserRoles as ur')
-                        ->join('Roles as r', 'r.Id', '=', 'ur.RoleId')
-                        ->where('ur.UserId', $id)
-                        ->pluck('r.Name')
+                if ($urTable && $rTable) {
+                    $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
+                    $urRoleCol = $schema->hasColumn($urTable, 'RoleId') ? 'RoleId' : 'role_id';
+                    $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
+                    $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+
+                    $roles = $conn->table("{$urTable} as ur")
+                        ->join("{$rTable} as r", "r.{$rIdCol}", '=', "ur.{$urRoleCol}")
+                        ->where("ur.{$urUserCol}", $id)
+                        ->pluck("r.{$rNameCol}")
                         ->all();
                 }
                 if (empty($roles)) {
@@ -190,11 +258,13 @@ class UserController extends Controller
                 $postCount = Schema::hasTable('contents') ? Post::where('user_id', $id)->count() : 0;
 
                 return response()->json([
-                    'id' => $user->Id,
-                    'full_name' => $user->FullName,
-                    'email' => $user->Email,
+                    'id' => $user->{$idCol},
+                    'full_name' => $user->{$nameCol},
+                    'email' => $user->{$emailCol},
+                    'phone' => $phoneCol ? ($user->{$phoneCol} ?? '0901234567') : '0901234567',
+                    'avatar_url' => $avatarCol ? ($user->{$avatarCol} ?? 'https://fanhub.com/avatar.png') : 'https://fanhub.com/avatar.png',
                     'roles' => $roles,
-                    'status' => ucfirst(strtolower($user->Status ?? 'Active')),
+                    'status' => ucfirst(strtolower($user->{$statusCol} ?? 'Active')),
                     'stats' => [
                         'total_orders' => 3,
                         'total_posts' => $postCount > 0 ? $postCount : 12,
@@ -236,7 +306,7 @@ class UserController extends Controller
     }
 
     /**
-     * Tạo tài khoản quản trị
+     * Tạo tài khoản quản trị trong C# Identity
      * POST /api/v1/admin/users
      */
     public function store(Request $request): JsonResponse
@@ -246,25 +316,46 @@ class UserController extends Controller
         $roleName = $request->input('role', 'Moderator');
         $newId = 'usr_' . Str::lower(Str::random(12));
 
-        $usersTable = Schema::hasTable('Users') ? 'Users' : (Schema::hasTable('users') ? 'users' : null);
+        [$conn, $usersTable, $urTable, $rTable] = $this->resolveIdentityContext();
 
-        if ($usersTable) {
-            DB::table($usersTable)->insert([
-                'Id' => $newId,
-                'Email' => $email,
-                'FullName' => $fullName,
-                'PasswordHash' => password_hash($request->input('password', 'SecurePassword123@'), PASSWORD_BCRYPT),
-                'Status' => 'Active',
-                'CreatedAt' => Carbon::now(),
-                'UpdatedAt' => Carbon::now(),
-            ]);
+        if ($conn && $usersTable) {
+            $schema = $conn->getSchemaBuilder();
+            $idCol = $schema->hasColumn($usersTable, 'Id') ? 'Id' : 'id';
+            $nameCol = $schema->hasColumn($usersTable, 'FullName') ? 'FullName' : ($schema->hasColumn($usersTable, 'full_name') ? 'full_name' : 'name');
+            $emailCol = $schema->hasColumn($usersTable, 'Email') ? 'Email' : 'email';
+            $passCol = $schema->hasColumn($usersTable, 'PasswordHash') ? 'PasswordHash' : ($schema->hasColumn($usersTable, 'password_hash') ? 'password_hash' : 'password');
+            $statusCol = $schema->hasColumn($usersTable, 'Status') ? 'Status' : 'status';
+            $createdCol = $schema->hasColumn($usersTable, 'CreatedAt') ? 'CreatedAt' : 'created_at';
+            $updatedCol = $schema->hasColumn($usersTable, 'UpdatedAt') ? 'UpdatedAt' : 'updated_at';
 
-            if (Schema::hasTable('UserRoles') && Schema::hasTable('Roles')) {
-                $role = DB::table('Roles')->where('Name', $roleName)->first();
+            $insertData = [
+                $idCol => $newId,
+                $nameCol => $fullName,
+                $emailCol => $email,
+                $passCol => password_hash($request->input('password', 'SecurePassword123@'), PASSWORD_BCRYPT),
+                $statusCol => 'Active',
+            ];
+
+            if ($createdCol) {
+                $insertData[$createdCol] = Carbon::now();
+            }
+            if ($updatedCol) {
+                $insertData[$updatedCol] = Carbon::now();
+            }
+
+            $conn->table($usersTable)->insert($insertData);
+
+            if ($urTable && $rTable) {
+                $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+                $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
+                $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
+                $urRoleCol = $schema->hasColumn($urTable, 'RoleId') ? 'RoleId' : 'role_id';
+
+                $role = $conn->table($rTable)->where($rNameCol, $roleName)->first();
                 if ($role) {
-                    DB::table('UserRoles')->insert([
-                        'UserId' => $newId,
-                        'RoleId' => $role->Id,
+                    $conn->table($urTable)->insert([
+                        $urUserCol => $newId,
+                        $urRoleCol => $role->{$rIdCol},
                     ]);
                 }
             }
@@ -284,19 +375,26 @@ class UserController extends Controller
     }
 
     /**
-     * Cập nhật trạng thái người dùng (Ban / Active)
+     * Cập nhật trạng thái người dùng (Ban / Active) trong C# Identity
      * PUT /api/v1/admin/users/{id}/status
      */
     public function updateStatus(Request $request, string $id): JsonResponse
     {
         $status = $request->input('status', 'Banned');
-        $usersTable = Schema::hasTable('Users') ? 'Users' : (Schema::hasTable('users') ? 'users' : null);
+        [$conn, $usersTable] = $this->resolveIdentityContext();
 
-        if ($usersTable) {
-            DB::table($usersTable)->where('Id', $id)->update([
-                'Status' => $status,
-                'UpdatedAt' => Carbon::now(),
-            ]);
+        if ($conn && $usersTable) {
+            $schema = $conn->getSchemaBuilder();
+            $idCol = $schema->hasColumn($usersTable, 'Id') ? 'Id' : 'id';
+            $statusCol = $schema->hasColumn($usersTable, 'Status') ? 'Status' : 'status';
+            $updatedCol = $schema->hasColumn($usersTable, 'UpdatedAt') ? 'UpdatedAt' : 'updated_at';
+
+            $updateData = [$statusCol => $status];
+            if ($updatedCol) {
+                $updateData[$updatedCol] = Carbon::now();
+            }
+
+            $conn->table($usersTable)->where($idCol, $id)->update($updateData);
         }
 
         if (Schema::hasTable('users_projection')) {
@@ -312,20 +410,27 @@ class UserController extends Controller
     }
 
     /**
-     * Phân quyền người dùng
+     * Phân quyền người dùng trong C# Identity
      * PUT /api/v1/admin/users/{id}/roles
      */
     public function updateRoles(Request $request, string $id): JsonResponse
     {
         $roleName = $request->input('role', 'EventOwner');
+        [$conn, $usersTable, $urTable, $rTable] = $this->resolveIdentityContext();
 
-        if (Schema::hasTable('UserRoles') && Schema::hasTable('Roles')) {
-            $role = DB::table('Roles')->where('Name', $roleName)->first();
+        if ($conn && $urTable && $rTable) {
+            $schema = $conn->getSchemaBuilder();
+            $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+            $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
+            $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
+            $urRoleCol = $schema->hasColumn($urTable, 'RoleId') ? 'RoleId' : 'role_id';
+
+            $role = $conn->table($rTable)->where($rNameCol, $roleName)->first();
             if ($role) {
-                DB::table('UserRoles')->where('UserId', $id)->delete();
-                DB::table('UserRoles')->insert([
-                    'UserId' => $id,
-                    'RoleId' => $role->Id,
+                $conn->table($urTable)->where($urUserCol, $id)->delete();
+                $conn->table($urTable)->insert([
+                    $urUserCol => $id,
+                    $urRoleCol => $role->{$rIdCol},
                 ]);
             }
         }
@@ -336,18 +441,23 @@ class UserController extends Controller
     }
 
     /**
-     * Xóa vĩnh viễn người dùng khỏi hệ thống
+     * Xóa vĩnh viễn người dùng khỏi C# Identity
      * DELETE /api/v1/admin/users/{id}
      */
     public function destroy(string $id): JsonResponse
     {
-        $usersTable = Schema::hasTable('Users') ? 'Users' : (Schema::hasTable('users') ? 'users' : null);
+        [$conn, $usersTable, $urTable] = $this->resolveIdentityContext();
 
-        if ($usersTable) {
-            if (Schema::hasTable('UserRoles')) {
-                DB::table('UserRoles')->where('UserId', $id)->delete();
+        if ($conn && $usersTable) {
+            $schema = $conn->getSchemaBuilder();
+            $idCol = $schema->hasColumn($usersTable, 'Id') ? 'Id' : 'id';
+
+            if ($urTable) {
+                $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
+                $conn->table($urTable)->where($urUserCol, $id)->delete();
             }
-            DB::table($usersTable)->where('Id', $id)->delete();
+
+            $conn->table($usersTable)->where($idCol, $id)->delete();
         }
 
         if (Schema::hasTable('users_projection')) {
@@ -368,10 +478,7 @@ class UserController extends Controller
      */
     public function ban(Request $request, string $id): JsonResponse
     {
-        $user = UserProjection::find($id);
-        if ($user) {
-            $user->update(['status' => $request->input('status', 'banned')]);
-        }
+        $this->updateStatus($request, $id);
 
         return response()->json([
             'message' => 'Cập nhật thành công',

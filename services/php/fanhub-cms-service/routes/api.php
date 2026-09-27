@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Route;
 */
 
 use App\Http\Controllers\Api\Admin\CategoryController;
+use App\Http\Controllers\Api\Admin\CharacterController;
 use App\Http\Controllers\Api\Admin\CommentController as AdminCommentController;
 use App\Http\Controllers\Api\Admin\ContentController;
 use App\Http\Controllers\Api\Admin\DashboardController;
@@ -27,6 +28,12 @@ use App\Http\Controllers\Api\Client\GroupController;
 use App\Http\Controllers\Api\Client\PostController;
 
 Route::prefix('v1/admin')->middleware(['admin.jwt'])->group(function () {
+    // Characters Management
+    Route::get('characters', [CharacterController::class, 'index']);
+    Route::post('characters', [CharacterController::class, 'store']);
+    Route::put('characters/{id}', [CharacterController::class, 'update']);
+    Route::delete('characters/{id}', [CharacterController::class, 'destroy']);
+
     // Tags Management
     Route::get('tags', [TagController::class, 'index']);
     Route::post('tags', [TagController::class, 'store']);
