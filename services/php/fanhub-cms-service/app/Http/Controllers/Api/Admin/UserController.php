@@ -27,7 +27,7 @@ class UserController extends Controller
                 $schema = $conn->getSchemaBuilder();
 
                 $usersTable = null;
-                foreach (['Users', 'users'] as $tbl) {
+                foreach (['Users', 'users', 'users_projection'] as $tbl) {
                     if ($schema->hasTable($tbl)) {
                         $usersTable = $tbl;
                         break;
@@ -62,7 +62,7 @@ class UserController extends Controller
     }
 
     /**
-     * Danh sách người dùng từ hệ thống C# Identity
+     * Danh sách người dùng từ hệ thống C# Identity (SQL Server)
      * GET /api/v1/admin/users?page=1&limit=20&search=nguyen&role=User&status=Active
      */
     public function index(Request $request): JsonResponse
@@ -75,14 +75,14 @@ class UserController extends Controller
 
         [$conn, $usersTable, $urTable, $rTable] = $this->resolveIdentityContext();
 
-        // 1. Nếu có bảng Users từ C# SQL Server hoặc DB chung
+        // 1. Truy vấn trực tiếp từ bảng Users/users bên C# Identity SQL Server (hoặc DB hiện tại)
         if ($conn && $usersTable) {
             $schema = $conn->getSchemaBuilder();
             $idCol = $schema->hasColumn($usersTable, 'Id') ? 'Id' : 'id';
             $nameCol = $schema->hasColumn($usersTable, 'FullName') ? 'FullName' : ($schema->hasColumn($usersTable, 'full_name') ? 'full_name' : 'name');
             $emailCol = $schema->hasColumn($usersTable, 'Email') ? 'Email' : 'email';
             $statusCol = $schema->hasColumn($usersTable, 'Status') ? 'Status' : 'status';
-            $createdCol = $schema->hasColumn($usersTable, 'CreatedAt') ? 'CreatedAt' : 'created_at';
+            $createdCol = $schema->hasColumn($usersTable, 'CreatedAt') ? 'CreatedAt' : ($schema->hasColumn($usersTable, 'created_at') ? 'created_at' : null);
 
             $query = $conn->table($usersTable . ' as u');
 
@@ -92,29 +92,37 @@ class UserController extends Controller
                 $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
                 $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
 
+                $selects = [
+                    "u.{$idCol} as id",
+                    "u.{$nameCol} as full_name",
+                    "u.{$emailCol} as email",
+                    "u.{$statusCol} as status",
+                    DB::raw("COALESCE(r.{$rNameCol}, 'User') as role"),
+                ];
+                if ($createdCol) {
+                    $selects[] = "u.{$createdCol} as created_at";
+                }
+
                 $query->leftJoin($urTable . ' as ur', "ur.{$urUserCol}", '=', "u.{$idCol}")
                       ->leftJoin($rTable . ' as r', "r.{$rIdCol}", '=', "ur.{$urRoleCol}")
-                      ->select([
-                          "u.{$idCol} as id",
-                          "u.{$nameCol} as full_name",
-                          "u.{$emailCol} as email",
-                          "u.{$statusCol} as status",
-                          "u.{$createdCol} as created_at",
-                          DB::raw("COALESCE(r.{$rNameCol}, 'User') as role"),
-                      ]);
+                      ->select($selects);
 
                 if ($role) {
                     $query->where("r.{$rNameCol}", $role);
                 }
             } else {
-                $query->select([
+                $selects = [
                     "u.{$idCol} as id",
                     "u.{$nameCol} as full_name",
                     "u.{$emailCol} as email",
                     "u.{$statusCol} as status",
-                    "u.{$createdCol} as created_at",
                     DB::raw("'User' as role"),
-                ]);
+                ];
+                if ($createdCol) {
+                    $selects[] = "u.{$createdCol} as created_at";
+                }
+
+                $query->select($selects);
             }
 
             if ($search) {
@@ -139,66 +147,21 @@ class UserController extends Controller
                     'email' => $row->email,
                     'role' => $row->role ?? 'User',
                     'status' => ucfirst(strtolower($row->status ?? 'Active')),
-                    'created_at' => $row->created_at ? Carbon::parse($row->created_at)->format('Y-m-d') : '2026-09-01',
+                    'created_at' => isset($row->created_at) && $row->created_at ? Carbon::parse($row->created_at)->format('Y-m-d') : '2026-09-01',
                 ];
             });
 
-            if ($data->isNotEmpty()) {
-                return response()->json([
-                    'data' => $data,
-                    'meta' => [
-                        'total' => $total,
-                        'page' => $page,
-                        'limit' => $limit,
-                    ],
-                ], JsonResponse::HTTP_OK);
-            }
+            return response()->json([
+                'data' => $data,
+                'meta' => [
+                    'total' => $total,
+                    'page' => $page,
+                    'limit' => $limit,
+                ],
+            ], JsonResponse::HTTP_OK);
         }
 
-        // 2. Dự phòng qua bảng users_projection nội bộ
-        if (Schema::hasTable('users_projection')) {
-            $query = UserProjection::query();
-
-            if ($search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('full_name', 'like', "%{$search}%")
-                      ->orWhere('email', 'like', "%{$search}%");
-                });
-            }
-
-            if ($status) {
-                $query->whereRaw('LOWER(status) = ?', [strtolower($status)]);
-            }
-
-            $query->orderBy('created_at', 'desc');
-            $total = $query->count();
-            $users = $query->skip(($page - 1) * $limit)->take($limit)->get();
-
-            if ($users->isNotEmpty()) {
-                $data = $users->map(function (UserProjection $user) use ($role) {
-                    return [
-                        'id' => $user->id,
-                        'title' => $user->full_name ?? 'Quản lý người dùng',
-                        'full_name' => $user->full_name,
-                        'email' => $user->email,
-                        'role' => $role ?? 'User',
-                        'status' => ucfirst(strtolower($user->status ?? 'Active')),
-                        'created_at' => $user->created_at ? $user->created_at->format('Y-m-d') : '2026-09-01',
-                    ];
-                });
-
-                return response()->json([
-                    'data' => $data,
-                    'meta' => [
-                        'total' => $total,
-                        'page' => $page,
-                        'limit' => $limit,
-                    ],
-                ], JsonResponse::HTTP_OK);
-            }
-        }
-
-        // 3. Mẫu theo tài liệu đặc tả khi database chưa có bản ghi
+        // Mẫu theo tài liệu đặc tả khi database chưa kết nối được
         return response()->json([
             'data' => [
                 [
