@@ -75,7 +75,6 @@ class UserController extends Controller
 
         [$conn, $usersTable, $urTable, $rTable] = $this->resolveIdentityContext();
 
-        // 1. Truy vấn trực tiếp từ bảng Users/users bên C# Identity SQL Server (hoặc DB hiện tại)
         if ($conn && $usersTable) {
             $schema = $conn->getSchemaBuilder();
             $idCol = $schema->hasColumn($usersTable, 'Id') ? 'Id' : 'id';
@@ -86,29 +85,55 @@ class UserController extends Controller
 
             $query = $conn->table($usersTable . ' as u');
 
-            if ($urTable && $rTable) {
+            if ($urTable) {
                 $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
                 $urRoleCol = $schema->hasColumn($urTable, 'RoleId') ? 'RoleId' : 'role_id';
-                $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
-                $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
 
                 $selects = [
                     "u.{$idCol} as id",
                     "u.{$nameCol} as full_name",
                     "u.{$emailCol} as email",
                     "u.{$statusCol} as status",
-                    DB::raw("COALESCE(r.{$rNameCol}, 'User') as role"),
+                    "ur.{$urRoleCol} as ur_role_id",
                 ];
                 if ($createdCol) {
                     $selects[] = "u.{$createdCol} as created_at";
                 }
 
-                $query->leftJoin($urTable . ' as ur', "ur.{$urUserCol}", '=', "u.{$idCol}")
-                      ->leftJoin($rTable . ' as r', "r.{$rIdCol}", '=', "ur.{$urRoleCol}")
-                      ->select($selects);
+                if ($rTable) {
+                    $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
+                    $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+                    $selects[] = "r.{$rNameCol} as role_name";
+
+                    $query->leftJoin($urTable . ' as ur', "ur.{$urUserCol}", '=', "u.{$idCol}")
+                          ->leftJoin($rTable . ' as r', "r.{$rIdCol}", '=', "ur.{$urRoleCol}");
+                } else {
+                    $query->leftJoin($urTable . ' as ur', "ur.{$urUserCol}", '=', "u.{$idCol}");
+                }
+
+                $query->select($selects);
 
                 if ($role) {
-                    $query->where("r.{$rNameCol}", $role);
+                    $roleLower = strtolower($role);
+                    if ($roleLower === 'admin') {
+                        $query->where(function ($q) use ($rTable) {
+                            $q->whereRaw("LOWER(CAST(ur.RoleId AS VARCHAR(36))) = '11111111-1111-1111-1111-111111111111'");
+                            if ($rTable) {
+                                $q->orWhereRaw("LOWER(r.Name) = 'admin'");
+                            }
+                        });
+                    } elseif ($roleLower === 'user') {
+                        $query->where(function ($q) use ($rTable) {
+                            $q->whereRaw("LOWER(CAST(ur.RoleId AS VARCHAR(36))) = '22222222-2222-2222-2222-222222222222'")
+                              ->orWhereNull("ur.RoleId");
+                            if ($rTable) {
+                                $q->orWhereRaw("LOWER(r.Name) = 'user'");
+                            }
+                        });
+                    } elseif ($rTable) {
+                        $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+                        $query->whereRaw("LOWER(r.{$rNameCol}) = ?", [$roleLower]);
+                    }
                 }
             } else {
                 $selects = [
@@ -116,7 +141,7 @@ class UserController extends Controller
                     "u.{$nameCol} as full_name",
                     "u.{$emailCol} as email",
                     "u.{$statusCol} as status",
-                    DB::raw("'User' as role"),
+                    DB::raw("'User' as role_name"),
                 ];
                 if ($createdCol) {
                     $selects[] = "u.{$createdCol} as created_at";
@@ -126,9 +151,10 @@ class UserController extends Controller
             }
 
             if ($search) {
-                $query->where(function ($q) use ($search, $nameCol, $emailCol) {
-                    $q->where("u.{$nameCol}", 'like', "%{$search}%")
-                      ->orWhere("u.{$emailCol}", 'like', "%{$search}%");
+                $searchLower = strtolower($search);
+                $query->where(function ($q) use ($searchLower, $nameCol, $emailCol) {
+                    $q->whereRaw("LOWER(u.{$nameCol}) LIKE ?", ["%{$searchLower}%"])
+                      ->orWhereRaw("LOWER(u.{$emailCol}) LIKE ?", ["%{$searchLower}%"]);
                 });
             }
 
@@ -140,12 +166,27 @@ class UserController extends Controller
             $users = $query->skip(($page - 1) * $limit)->take($limit)->get();
 
             $data = $users->map(function ($row) {
+                $roleName = $row->role_name ?? null;
+                $urRoleId = strtolower((string) ($row->ur_role_id ?? ''));
+
+                if (empty($roleName) || $roleName === 'User') {
+                    if ($urRoleId === '11111111-1111-1111-1111-111111111111') {
+                        $roleName = 'Admin';
+                    } elseif ($urRoleId === '33333333-3333-3333-3333-333333333333') {
+                        $roleName = 'Moderator';
+                    } elseif ($urRoleId === '44444444-4444-4444-4444-444444444444') {
+                        $roleName = 'EventOwner';
+                    } else {
+                        $roleName = $roleName ?? 'User';
+                    }
+                }
+
                 return [
                     'id' => $row->id,
                     'title' => $row->full_name,
                     'full_name' => $row->full_name,
                     'email' => $row->email,
-                    'role' => $row->role ?? 'User',
+                    'role' => $roleName,
                     'status' => ucfirst(strtolower($row->status ?? 'Active')),
                     'created_at' => isset($row->created_at) && $row->created_at ? Carbon::parse($row->created_at)->format('Y-m-d') : '2026-09-01',
                 ];
@@ -161,21 +202,11 @@ class UserController extends Controller
             ], JsonResponse::HTTP_OK);
         }
 
-        // Mẫu theo tài liệu đặc tả khi database chưa kết nối được
+        // Không tự sinh mock/seeder data: nếu DB không có dữ liệu thì trả về mảng rỗng
         return response()->json([
-            'data' => [
-                [
-                    'id' => 'usr_xxx',
-                    'title' => 'Nguyen Van A',
-                    'full_name' => 'Nguyen Van A',
-                    'email' => 'a@gmail.com',
-                    'role' => 'User',
-                    'status' => 'Active',
-                    'created_at' => '2026-09-01',
-                ],
-            ],
+            'data' => [],
             'meta' => [
-                'total' => 150,
+                'total' => 0,
                 'page' => $page,
                 'limit' => $limit,
             ],
@@ -202,20 +233,40 @@ class UserController extends Controller
             $user = $conn->table($usersTable)->where($idCol, $id)->first();
             if ($user) {
                 $roles = [];
-                if ($urTable && $rTable) {
+                if ($urTable) {
                     $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
                     $urRoleCol = $schema->hasColumn($urTable, 'RoleId') ? 'RoleId' : 'role_id';
-                    $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
-                    $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
 
-                    $roles = $conn->table("{$urTable} as ur")
-                        ->join("{$rTable} as r", "r.{$rIdCol}", '=', "ur.{$urRoleCol}")
-                        ->where("ur.{$urUserCol}", $id)
-                        ->pluck("r.{$rNameCol}")
-                        ->all();
+                    if ($rTable) {
+                        $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
+                        $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+
+                        $roles = $conn->table("{$urTable} as ur")
+                            ->join("{$rTable} as r", "r.{$rIdCol}", '=', "ur.{$urRoleCol}")
+                            ->where("ur.{$urUserCol}", $id)
+                            ->pluck("r.{$rNameCol}")
+                            ->filter()
+                            ->all();
+                    }
+
+                    if (empty($roles)) {
+                        $userRoles = $conn->table($urTable)->where($urUserCol, $id)->pluck($urRoleCol)->all();
+                        foreach ($userRoles as $rId) {
+                            $rIdStr = strtolower((string) $rId);
+                            if ($rIdStr === '11111111-1111-1111-1111-111111111111') {
+                                $roles[] = 'Admin';
+                            } elseif ($rIdStr === '33333333-3333-3333-3333-333333333333') {
+                                $roles[] = 'Moderator';
+                            } elseif ($rIdStr === '44444444-4444-4444-4444-444444444444') {
+                                $roles[] = 'EventOwner';
+                            } else {
+                                $roles[] = 'User';
+                            }
+                        }
+                    }
                 }
                 if (empty($roles)) {
-                    $roles = ['EventOwner'];
+                    $roles = ['User'];
                 }
 
                 $postCount = Schema::hasTable('contents') ? Post::where('user_id', $id)->count() : 0;
