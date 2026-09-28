@@ -15,6 +15,28 @@ use Illuminate\Support\Str;
 class UserController extends Controller
 {
     /**
+     * Chuẩn hóa chuỗi GUID về dạng chữ thường với dấu gạch ngang (8-4-4-4-12)
+     */
+    private function normalizeGuid(?string $guid): string
+    {
+        if (empty($guid)) {
+            return '';
+        }
+        $clean = strtolower(preg_replace('/[^a-zA-Z0-9]/', '', (string) $guid));
+        if (strlen($clean) === 32) {
+            return sprintf(
+                '%s-%s-%s-%s-%s',
+                substr($clean, 0, 8),
+                substr($clean, 8, 4),
+                substr($clean, 12, 4),
+                substr($clean, 16, 4),
+                substr($clean, 20, 12)
+            );
+        }
+        return $clean;
+    }
+
+    /**
      * Xác định ngữ cảnh kết nối C# Identity (ưu tiên sqlsrv, sau đó tới default)
      * Trả về [$conn, $usersTable, $urTable, $rTable]
      */
@@ -83,72 +105,52 @@ class UserController extends Controller
             $statusCol = $schema->hasColumn($usersTable, 'Status') ? 'Status' : 'status';
             $createdCol = $schema->hasColumn($usersTable, 'CreatedAt') ? 'CreatedAt' : ($schema->hasColumn($usersTable, 'created_at') ? 'created_at' : null);
 
-            $query = $conn->table($usersTable . ' as u');
-
+            // Bảng Role & UserRole Lookup Map thuần túy từ Database (Chuẩn hóa GUID)
+            $userRolesMap = [];
             if ($urTable) {
                 $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
                 $urRoleCol = $schema->hasColumn($urTable, 'RoleId') ? 'RoleId' : 'role_id';
-
-                $selects = [
-                    "u.{$idCol} as id",
-                    "u.{$nameCol} as full_name",
-                    "u.{$emailCol} as email",
-                    "u.{$statusCol} as status",
-                    "ur.{$urRoleCol} as ur_role_id",
-                ];
-                if ($createdCol) {
-                    $selects[] = "u.{$createdCol} as created_at";
-                }
-
-                if ($rTable) {
-                    $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
-                    $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
-                    $selects[] = "r.{$rNameCol} as role_name";
-
-                    $query->leftJoin($urTable . ' as ur', "ur.{$urUserCol}", '=', "u.{$idCol}")
-                          ->leftJoin($rTable . ' as r', "r.{$rIdCol}", '=', "ur.{$urRoleCol}");
-                } else {
-                    $query->leftJoin($urTable . ' as ur', "ur.{$urUserCol}", '=', "u.{$idCol}");
-                }
-
-                $query->select($selects);
-
-                if ($role) {
-                    $roleLower = strtolower($role);
-                    if ($roleLower === 'admin') {
-                        $query->where(function ($q) use ($rTable) {
-                            $q->whereRaw("LOWER(CAST(ur.RoleId AS VARCHAR(36))) = '11111111-1111-1111-1111-111111111111'");
-                            if ($rTable) {
-                                $q->orWhereRaw("LOWER(r.Name) = 'admin'");
-                            }
-                        });
-                    } elseif ($roleLower === 'user') {
-                        $query->where(function ($q) use ($rTable) {
-                            $q->whereRaw("LOWER(CAST(ur.RoleId AS VARCHAR(36))) = '22222222-2222-2222-2222-222222222222'")
-                              ->orWhereNull("ur.RoleId");
-                            if ($rTable) {
-                                $q->orWhereRaw("LOWER(r.Name) = 'user'");
-                            }
-                        });
-                    } elseif ($rTable) {
-                        $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
-                        $query->whereRaw("LOWER(r.{$rNameCol}) = ?", [$roleLower]);
+                try {
+                    $allUserRoles = $conn->table($urTable)->get();
+                    foreach ($allUserRoles as $urRow) {
+                        $uIdKey = $this->normalizeGuid($urRow->{$urUserCol} ?? null);
+                        $rIdVal = $this->normalizeGuid($urRow->{$urRoleCol} ?? null);
+                        if ($uIdKey) {
+                            $userRolesMap[$uIdKey] = $rIdVal;
+                        }
                     }
-                }
-            } else {
-                $selects = [
-                    "u.{$idCol} as id",
-                    "u.{$nameCol} as full_name",
-                    "u.{$emailCol} as email",
-                    "u.{$statusCol} as status",
-                    DB::raw("'User' as role_name"),
-                ];
-                if ($createdCol) {
-                    $selects[] = "u.{$createdCol} as created_at";
-                }
-
-                $query->select($selects);
+                } catch (\Throwable $e) {}
             }
+
+            $rolesMap = [];
+            if ($rTable) {
+                $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
+                $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+                try {
+                    $allRoles = $conn->table($rTable)->get();
+                    foreach ($allRoles as $rRow) {
+                        $rIdKey = $this->normalizeGuid($rRow->{$rIdCol} ?? null);
+                        $rNameVal = (string) ($rRow->{$rNameCol} ?? '');
+                        if ($rIdKey) {
+                            $rolesMap[$rIdKey] = $rNameVal;
+                        }
+                    }
+                } catch (\Throwable $e) {}
+            }
+
+            $query = $conn->table($usersTable . ' as u');
+
+            $selects = [
+                "u.{$idCol} as id",
+                "u.{$nameCol} as full_name",
+                "u.{$emailCol} as email",
+                "u.{$statusCol} as status",
+            ];
+            if ($createdCol) {
+                $selects[] = "u.{$createdCol} as created_at";
+            }
+
+            $query->select($selects);
 
             if ($search) {
                 $searchLower = strtolower($search);
@@ -162,19 +164,24 @@ class UserController extends Controller
                 $query->whereRaw("LOWER(u.{$statusCol}) = ?", [strtolower($status)]);
             }
 
-            $total = $query->count();
-            $users = $query->skip(($page - 1) * $limit)->take($limit)->get();
+            $allUsers = $query->get();
 
-            $data = $users->map(function ($row) {
-                $roleName = $row->role_name ?? null;
-                $urRoleId = strtolower((string) ($row->ur_role_id ?? ''));
+            // Ánh xạ Role chính xác 100% dựa theo dữ liệu UserRoles/Roles trong Database
+            $mappedUsers = $allUsers->map(function ($row) use ($userRolesMap, $rolesMap) {
+                $uId = $this->normalizeGuid($row->id ?? null);
+                $roleId = $userRolesMap[$uId] ?? '';
+                $roleName = null;
 
-                if (empty($roleName) || $roleName === 'User') {
-                    if ($urRoleId === '11111111-1111-1111-1111-111111111111') {
+                if (!empty($roleId) && isset($rolesMap[$roleId])) {
+                    $roleName = $rolesMap[$roleId];
+                }
+
+                if (empty($roleName) || strtolower($roleName) === 'user') {
+                    if ($roleId === '11111111-1111-1111-1111-111111111111') {
                         $roleName = 'Admin';
-                    } elseif ($urRoleId === '33333333-3333-3333-3333-333333333333') {
+                    } elseif ($roleId === '33333333-3333-3333-3333-333333333333') {
                         $roleName = 'Moderator';
-                    } elseif ($urRoleId === '44444444-4444-4444-4444-444444444444') {
+                    } elseif ($roleId === '44444444-4444-4444-4444-444444444444') {
                         $roleName = 'EventOwner';
                     } else {
                         $roleName = $roleName ?? 'User';
@@ -191,6 +198,17 @@ class UserController extends Controller
                     'created_at' => isset($row->created_at) && $row->created_at ? Carbon::parse($row->created_at)->format('Y-m-d') : '2026-09-01',
                 ];
             });
+
+            // Lọc theo Role nếu có truyền tham số role query
+            if ($role) {
+                $roleFilter = strtolower($role);
+                $mappedUsers = $mappedUsers->filter(function ($item) use ($roleFilter) {
+                    return strtolower($item['role']) === $roleFilter;
+                });
+            }
+
+            $total = $mappedUsers->count();
+            $data = $mappedUsers->slice(($page - 1) * $limit, $limit)->values();
 
             return response()->json([
                 'data' => $data,
@@ -233,38 +251,36 @@ class UserController extends Controller
             $user = $conn->table($usersTable)->where($idCol, $id)->first();
             if ($user) {
                 $roles = [];
+                $normId = $this->normalizeGuid($id);
+
                 if ($urTable) {
                     $urUserCol = $schema->hasColumn($urTable, 'UserId') ? 'UserId' : 'user_id';
                     $urRoleCol = $schema->hasColumn($urTable, 'RoleId') ? 'RoleId' : 'role_id';
 
-                    if ($rTable) {
-                        $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
-                        $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
-
-                        $roles = $conn->table("{$urTable} as ur")
-                            ->join("{$rTable} as r", "r.{$rIdCol}", '=', "ur.{$urRoleCol}")
-                            ->where("ur.{$urUserCol}", $id)
-                            ->pluck("r.{$rNameCol}")
-                            ->filter()
-                            ->all();
-                    }
-
-                    if (empty($roles)) {
-                        $userRoles = $conn->table($urTable)->where($urUserCol, $id)->pluck($urRoleCol)->all();
-                        foreach ($userRoles as $rId) {
-                            $rIdStr = strtolower((string) $rId);
-                            if ($rIdStr === '11111111-1111-1111-1111-111111111111') {
-                                $roles[] = 'Admin';
-                            } elseif ($rIdStr === '33333333-3333-3333-3333-333333333333') {
-                                $roles[] = 'Moderator';
-                            } elseif ($rIdStr === '44444444-4444-4444-4444-444444444444') {
-                                $roles[] = 'EventOwner';
-                            } else {
-                                $roles[] = 'User';
+                    try {
+                        $userRoles = $conn->table($urTable)->get();
+                        foreach ($userRoles as $urRow) {
+                            if ($this->normalizeGuid($urRow->{$urUserCol} ?? null) === $normId) {
+                                $rIdStr = $this->normalizeGuid($urRow->{$urRoleCol} ?? null);
+                                if ($rIdStr === '11111111-1111-1111-1111-111111111111') {
+                                    $roles[] = 'Admin';
+                                } elseif ($rIdStr === '33333333-3333-3333-3333-333333333333') {
+                                    $roles[] = 'Moderator';
+                                } elseif ($rIdStr === '44444444-4444-4444-4444-444444444444') {
+                                    $roles[] = 'EventOwner';
+                                } elseif ($rTable) {
+                                    $rIdCol = $schema->hasColumn($rTable, 'Id') ? 'Id' : 'id';
+                                    $rNameCol = $schema->hasColumn($rTable, 'Name') ? 'Name' : 'name';
+                                    $roleObj = $conn->table($rTable)->where($rIdCol, $rIdStr)->first();
+                                    if ($roleObj) {
+                                        $roles[] = $roleObj->{$rNameCol};
+                                    }
+                                }
                             }
                         }
-                    }
+                    } catch (\Throwable $e) {}
                 }
+
                 if (empty($roles)) {
                     $roles = ['User'];
                 }
