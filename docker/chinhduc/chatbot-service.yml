@@ -17,7 +17,7 @@ services:
       PORT: '3005'
       GEMINI_API_KEY: '${GEMINI_API_KEY}'
       QDRANT_URL: 'http://qdrant:6333'
-      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672/'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672/fanhub'
       REDIS_URL: 'redis://redis:6379'
     ports:
       - '127.0.0.1:3005:3005'
