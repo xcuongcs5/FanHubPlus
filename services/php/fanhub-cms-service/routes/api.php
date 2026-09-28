@@ -14,16 +14,48 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
+use App\Http\Controllers\Api\Admin\AuditLogController;
 use App\Http\Controllers\Api\Admin\CategoryController;
+use App\Http\Controllers\Api\Admin\CharacterController;
+use App\Http\Controllers\Api\Admin\CommentController as AdminCommentController;
+use App\Http\Controllers\Api\Admin\ContentController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\EventController;
+use App\Http\Controllers\Api\Admin\FaqController;
+use App\Http\Controllers\Api\Admin\FeedbackController;
 use App\Http\Controllers\Api\Admin\FinancialController;
+use App\Http\Controllers\Api\Admin\MerchandiseController;
+use App\Http\Controllers\Api\Admin\RefundController;
+use App\Http\Controllers\Api\Admin\SettingController;
+use App\Http\Controllers\Api\Admin\TagController;
+use App\Http\Controllers\Api\Admin\TransactionController;
 use App\Http\Controllers\Api\Admin\UserController;
 use App\Http\Controllers\Api\Client\CommentController;
 use App\Http\Controllers\Api\Client\GroupController;
 use App\Http\Controllers\Api\Client\PostController;
 
 Route::prefix('v1/admin')->middleware(['admin.jwt'])->group(function () {
+    // Merchandises Management
+    Route::get('merchandises', [MerchandiseController::class, 'index']);
+    Route::post('merchandises', [MerchandiseController::class, 'store']);
+    Route::put('merchandises/{id}', [MerchandiseController::class, 'update']);
+    Route::delete('merchandises/{id}', [MerchandiseController::class, 'destroy']);
+
+    // Characters Management
+    Route::get('characters', [CharacterController::class, 'index']);
+    Route::post('characters', [CharacterController::class, 'store']);
+    Route::put('characters/{id}', [CharacterController::class, 'update']);
+    Route::delete('characters/{id}', [CharacterController::class, 'destroy']);
+
+    // Tags Management
+    Route::get('tags', [TagController::class, 'index']);
+    Route::post('tags', [TagController::class, 'store']);
+    Route::delete('tags/{id}', [TagController::class, 'destroy']);
+
+    // Comments Moderation
+    Route::get('comments/flagged', [AdminCommentController::class, 'flagged']);
+    Route::delete('comments/{id}', [AdminCommentController::class, 'destroy']);
+
     // Categories
     Route::get('categories', [CategoryController::class, 'index']);
     Route::get('categories/{id}', [CategoryController::class, 'show']);
@@ -31,19 +63,62 @@ Route::prefix('v1/admin')->middleware(['admin.jwt'])->group(function () {
     Route::put('categories/{id}', [CategoryController::class, 'update']);
     Route::delete('categories/{id}', [CategoryController::class, 'destroy']);
 
-    // Dashboard Overview
-    Route::get('dashboard/overview', [DashboardController::class, 'overview']);
+    // Contents Management
+    Route::get('contents', [ContentController::class, 'index']);
+    Route::post('contents', [ContentController::class, 'store']);
+    Route::get('contents/{id}', [ContentController::class, 'show']);
+    Route::put('contents/{id}/review', [ContentController::class, 'review']);
+    Route::put('contents/{id}', [ContentController::class, 'update']);
+    Route::delete('contents/{id}', [ContentController::class, 'destroy']);
 
-    // Users & Ban
+    // Dashboard Overview & Stats
+    Route::get('dashboard/overview', [DashboardController::class, 'overview']);
+    Route::get('dashboard/stats/users', [DashboardController::class, 'statsUsers']);
+    Route::get('dashboard/stats/revenue', [DashboardController::class, 'statsRevenue']);
+    Route::get('dashboard/stats/categories', [DashboardController::class, 'statsCategories']);
+
+    // Users Management
     Route::get('users', [UserController::class, 'index']);
+    Route::post('users', [UserController::class, 'store']);
+    Route::get('users/{id}', [UserController::class, 'show']);
+    Route::put('users/{id}/status', [UserController::class, 'updateStatus']);
+    Route::put('users/{id}/roles', [UserController::class, 'updateRoles']);
+    Route::delete('users/{id}', [UserController::class, 'destroy']);
     Route::match(['put', 'post'], 'users/{id}/ban', [UserController::class, 'ban']);
 
-    // Events Pending & Approve
+    // Events Management
+    Route::get('events', [EventController::class, 'index']);
     Route::get('events/pending', [EventController::class, 'pending']);
     Route::post('events/{id}/approve', [EventController::class, 'approve']);
+    Route::get('events/{id}', [EventController::class, 'show']);
+    Route::put('events/{id}/review', [EventController::class, 'review']);
+    Route::delete('events/{id}', [EventController::class, 'destroy']);
 
     // Financial Reports
     Route::get('financial/reports', [FinancialController::class, 'reports']);
+
+    // Transactions & Refunds Management
+    Route::get('transactions', [TransactionController::class, 'index']);
+    Route::get('refunds', [RefundController::class, 'index']);
+    Route::post('refunds/{id}/process', [RefundController::class, 'process']);
+
+    // Feedbacks Management
+    Route::get('feedbacks', [FeedbackController::class, 'index']);
+    Route::get('feedbacks/{id}', [FeedbackController::class, 'show']);
+    Route::put('feedbacks/{id}/status', [FeedbackController::class, 'updateStatus']);
+
+    // Chatbot FAQs Management
+    Route::get('chatbot/faqs', [FaqController::class, 'index']);
+    Route::post('chatbot/faqs', [FaqController::class, 'store']);
+    Route::put('chatbot/faqs/{id}', [FaqController::class, 'update']);
+    Route::delete('chatbot/faqs/{id}', [FaqController::class, 'destroy']);
+
+    // Audit Logs
+    Route::get('audit-logs', [AuditLogController::class, 'index']);
+
+    // System Settings
+    Route::get('settings', [SettingController::class, 'show']);
+    Route::put('settings', [SettingController::class, 'update']);
 });
 
 Route::prefix('v1')->middleware(['client.jwt'])->group(function () {

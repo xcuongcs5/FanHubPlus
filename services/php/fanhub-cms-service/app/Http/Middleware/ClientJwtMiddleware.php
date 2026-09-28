@@ -76,7 +76,14 @@ class ClientJwtMiddleware
             }
         }
 
-        $userId = $payload['sub'] ?? $payload['user_id'] ?? $payload['id'] ?? 'user_guest';
+        $userId = $payload['sub']
+            ?? $payload['id']
+            ?? $payload['user_id']
+            ?? $payload['userId']
+            ?? $payload['UserId']
+            ?? $payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']
+            ?? $payload['nameid']
+            ?? 'user_guest';
         $request->attributes->set('auth_user_id', $userId);
         $request->attributes->set('jwt_payload', $payload);
 
