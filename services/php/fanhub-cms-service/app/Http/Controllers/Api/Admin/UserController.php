@@ -164,6 +164,10 @@ class UserController extends Controller
                 $query->whereRaw("LOWER(u.{$statusCol}) = ?", [strtolower($status)]);
             }
 
+            try {
+                $conn->table($usersTable)->whereRaw("LOWER({$statusCol}) = 'updated'")->update([$statusCol => 'Banned']);
+            } catch (\Throwable $e) {}
+
             $allUsers = $query->get();
 
             // Ánh xạ Role chính xác 100% dựa theo dữ liệu UserRoles/Roles trong Database
@@ -188,13 +192,21 @@ class UserController extends Controller
                     }
                 }
 
+                $rawSt = strtolower((string) ($row->status ?? 'active'));
+                $userStatus = 'Active';
+                if ($rawSt === 'banned' || $rawSt === 'ban' || $rawSt === 'updated') {
+                    $userStatus = 'Banned';
+                } elseif ($rawSt === 'deleted') {
+                    $userStatus = 'Deleted';
+                }
+
                 return [
                     'id' => $row->id,
                     'title' => $row->full_name,
                     'full_name' => $row->full_name,
                     'email' => $row->email,
                     'role' => $roleName,
-                    'status' => ucfirst(strtolower($row->status ?? 'Active')),
+                    'status' => $userStatus,
                     'created_at' => isset($row->created_at) && $row->created_at ? Carbon::parse($row->created_at)->format('Y-m-d') : '2026-09-01',
                 ];
             });
@@ -410,7 +422,24 @@ class UserController extends Controller
      */
     public function updateStatus(Request $request, string $id): JsonResponse
     {
-        $status = $request->input('status', 'Banned');
+        $targetStatus = strtolower((string) $request->input('targetStatus', ''));
+        $action = strtolower((string) $request->input('action', ''));
+        $rawStatus = strtolower((string) $request->input('status', ''));
+
+        if ($targetStatus === 'banned' || $targetStatus === 'ban' || $action === 'ban' || $action === 'banned' || $rawStatus === 'banned' || $rawStatus === 'ban') {
+            $status = 'Banned';
+        } elseif ($targetStatus === 'active' || $action === 'unban' || $action === 'active' || $rawStatus === 'active') {
+            $status = 'Active';
+        } elseif ($targetStatus === 'deleted' || $action === 'delete' || $rawStatus === 'deleted') {
+            $status = 'Deleted';
+        } elseif (!empty($targetStatus)) {
+            $status = ucfirst($targetStatus);
+        } elseif (!empty($rawStatus) && $rawStatus !== 'updated' && $rawStatus !== 'update') {
+            $status = ucfirst($rawStatus);
+        } else {
+            $status = 'Banned';
+        }
+
         [$conn, $usersTable] = $this->resolveIdentityContext();
 
         if ($conn && $usersTable) {
@@ -424,18 +453,27 @@ class UserController extends Controller
                 $updateData[$updatedCol] = Carbon::now();
             }
 
-            $conn->table($usersTable)->where($idCol, $id)->update($updateData);
+            $normId = $this->normalizeGuid($id);
+            $conn->table($usersTable)
+                ->where(function ($q) use ($idCol, $id, $normId) {
+                    $q->where($idCol, $id)
+                      ->orWhere($idCol, $normId)
+                      ->orWhere($idCol, strtolower($id))
+                      ->orWhere($idCol, strtoupper($id));
+                })
+                ->update($updateData);
         }
 
         if (Schema::hasTable('users_projection')) {
             $user = UserProjection::find($id);
             if ($user) {
-                $user->update(['status' => $status]);
+                $user->update(['status' => strtolower($status)]);
             }
         }
 
         return response()->json([
             'message' => 'Cập nhật trạng thái tài khoản thành công',
+            'status' => $status,
         ], JsonResponse::HTTP_OK);
     }
 
@@ -512,6 +550,7 @@ class UserController extends Controller
 
         return response()->json([
             'message' => 'Cập nhật thành công',
+            'status' => 'Banned',
         ], JsonResponse::HTTP_OK);
     }
 }
