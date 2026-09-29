@@ -61,21 +61,6 @@ class FeedbackController extends Controller
         $feedback = Feedback::find($id);
 
         if (!$feedback) {
-            if ($id === 'fb_xxx') {
-                return response()->json([
-                    'id' => 'fb_xxx',
-                    'user' => [
-                        'id' => 'usr_xxx',
-                        'name' => 'User C',
-                        'email' => 'c@gmail.com',
-                    ],
-                    'type' => 'bug',
-                    'content' => 'Chi tiết lỗi...',
-                    'screenshot_url' => 'https://...',
-                    'status' => 'Open',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy phản hồi.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -107,12 +92,6 @@ class FeedbackController extends Controller
         $feedback = Feedback::find($id);
 
         if (!$feedback) {
-            if ($id === 'fb_xxx') {
-                return response()->json([
-                    'message' => 'Cập nhật tiến độ xử lý và gửi phản hồi thành công',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy phản hồi.',
             ], JsonResponse::HTTP_NOT_FOUND);

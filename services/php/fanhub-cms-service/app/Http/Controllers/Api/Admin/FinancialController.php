@@ -34,19 +34,12 @@ class FinancialController extends Controller
                 }
             }
 
-            if (empty($breakdown)) {
-                $breakdown = [
-                    [
-                        'event_id' => 'evt_xxx',
-                        'event_title' => 'Cosplay Expo',
-                        'tickets_sold' => 450,
-                        'revenue' => 120000000,
-                    ],
-                ];
+            $totalVolume = 0;
+            $commissionEarned = 0;
+            foreach ($breakdown as $item) {
+                $totalVolume += $item['revenue'];
             }
-
-            $totalVolume = 450000000;
-            $commissionEarned = (int) ($totalVolume * 0.05); // 5% commission = 22,500,000
+            $commissionEarned = (int) ($totalVolume * 0.05);
 
             return response()->json([
                 'total_volume' => $totalVolume,

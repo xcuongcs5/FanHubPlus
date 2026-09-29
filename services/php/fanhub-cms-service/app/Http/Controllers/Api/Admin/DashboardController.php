@@ -21,76 +21,38 @@ class DashboardController extends Controller
      */
     public function overview(Request $request): JsonResponse
     {
-        $period = strtolower($request->query('period', 'month'));
-
-        // Kiểm tra xem database đã có dữ liệu thực tế hay chưa
-        $hasData = UserProjection::exists()
-            || Event::exists()
-            || Post::exists()
-            || FinancialReport::exists();
-
-        if ($hasData) {
-            $startDate = match ($period) {
-                'day' => Carbon::now()->startOfDay(),
-                'week' => Carbon::now()->startOfWeek(),
-                'year' => Carbon::now()->startOfYear(),
-                default => Carbon::now()->startOfMonth(), // 'month'
-            };
-
+        $totalUsers = 0;
+        $activeUsers = 0;
+        try {
             $totalUsers = UserProjection::count();
             $activeUsers = UserProjection::where('status', 'active')->count();
+        } catch (\Throwable $e) {}
+
+        $totalEvents = 0;
+        $pendingEvents = 0;
+        try {
             $totalEvents = Event::count();
             $pendingEvents = Event::where('status', 'pending')->count();
+        } catch (\Throwable $e) {}
+
+        $totalRevenue = 0;
+        try {
             $totalRevenue = (int) FinancialReport::sum('revenue');
+        } catch (\Throwable $e) {}
+
+        $totalPosts = 0;
+        try {
             $totalPosts = Post::count();
+        } catch (\Throwable $e) {}
 
-            return response()->json([
-                'total_users' => $totalUsers,
-                'active_users' => $activeUsers,
-                'total_events' => $totalEvents,
-                'pending_events' => $pendingEvents,
-                'total_revenue' => $totalRevenue,
-                'total_posts' => $totalPosts,
-            ], JsonResponse::HTTP_OK);
-        }
-
-        // Dữ liệu mẫu theo tài liệu đặc tả khi database chưa có dữ liệu
-        $mockData = match ($period) {
-            'day' => [
-                'total_users' => 520,
-                'active_users' => 120,
-                'total_events' => 2,
-                'pending_events' => 1,
-                'total_revenue' => 5000000,
-                'total_posts' => 45,
-            ],
-            'week' => [
-                'total_users' => 3600,
-                'active_users' => 850,
-                'total_events' => 12,
-                'pending_events' => 2,
-                'total_revenue' => 35000000,
-                'total_posts' => 310,
-            ],
-            'year' => [
-                'total_users' => 180000,
-                'active_users' => 42000,
-                'total_events' => 580,
-                'pending_events' => 15,
-                'total_revenue' => 1800000000,
-                'total_posts' => 15000,
-            ],
-            default => [ // 'month'
-                'total_users' => 15200,
-                'active_users' => 3400,
-                'total_events' => 48,
-                'pending_events' => 5,
-                'total_revenue' => 150000000,
-                'total_posts' => 1250,
-            ],
-        };
-
-        return response()->json($mockData, JsonResponse::HTTP_OK);
+        return response()->json([
+            'total_users' => $totalUsers,
+            'active_users' => $activeUsers,
+            'total_events' => $totalEvents,
+            'pending_events' => $pendingEvents,
+            'total_revenue' => $totalRevenue,
+            'total_posts' => $totalPosts,
+        ], JsonResponse::HTTP_OK);
     }
 
     /**
@@ -126,21 +88,14 @@ class DashboardController extends Controller
             })->values();
 
             return response()->json([
-                'growth_rate' => '15%',
+                'growth_rate' => '0%',
                 'chart_data' => $chartData,
             ], JsonResponse::HTTP_OK);
         }
 
-        // Dữ liệu mẫu theo tài liệu đặc tả khi database chưa có dữ liệu
         return response()->json([
-            'growth_rate' => '15%',
-            'chart_data' => [
-                [
-                    'date' => '2026-09-01',
-                    'new_users' => 120,
-                    'active_users' => 850,
-                ],
-            ],
+            'growth_rate' => '0%',
+            'chart_data' => [],
         ], JsonResponse::HTTP_OK);
     }
 
@@ -166,11 +121,11 @@ class DashboardController extends Controller
 
         if ($reports->isNotEmpty()) {
             $totalGmv = (int) $reports->sum('revenue');
-            $totalCommission = (int) round($totalGmv * 0.5); // hoặc commission cụ thể
+            $totalCommission = (int) round($totalGmv * 0.05);
 
             if ($groupBy === 'event') {
                 $series = $reports->groupBy(function (FinancialReport $r) {
-                    return $r->title ?? 'Sự kiện âm nhạc';
+                    return $r->title ?? 'Sự kiện';
                 })->map(function ($group, $eventName) {
                     return [
                         'event' => (string) $eventName,
@@ -195,25 +150,10 @@ class DashboardController extends Controller
             ], JsonResponse::HTTP_OK);
         }
 
-        // Dữ liệu mẫu theo tài liệu đặc tả khi database chưa có dữ liệu
-        $series = $groupBy === 'event'
-            ? [
-                [
-                    'event' => 'Sự kiện âm nhạc 2026',
-                    'revenue' => 50000000,
-                ],
-            ]
-            : [
-                [
-                    'month' => '2026-08',
-                    'revenue' => 180000000,
-                ],
-            ];
-
         return response()->json([
-            'total_gmv' => 50000000,
-            'total_commission' => 25000000,
-            'series' => $series,
+            'total_gmv' => 0,
+            'total_commission' => 0,
+            'series' => [],
         ], JsonResponse::HTTP_OK);
     }
 
@@ -232,8 +172,8 @@ class DashboardController extends Controller
             $data = $categories->map(function (Category $cat) {
                 return [
                     'category' => $cat->name,
-                    'views' => 45000,
-                    'posts' => $cat->posts_count > 0 ? (int) $cat->posts_count : 320,
+                    'views' => 0,
+                    'posts' => (int) ($cat->posts_count ?? 0),
                 ];
             });
 
@@ -242,20 +182,8 @@ class DashboardController extends Controller
             ], JsonResponse::HTTP_OK);
         }
 
-        // Dữ liệu mẫu theo tài liệu đặc tả khi database chưa có dữ liệu
         return response()->json([
-            'data' => [
-                [
-                    'category' => 'Esports',
-                    'views' => 45000,
-                    'posts' => 320,
-                ],
-                [
-                    'category' => 'Anime',
-                    'views' => 38000,
-                    'posts' => 290,
-                ],
-            ],
+            'data' => [],
         ], JsonResponse::HTTP_OK);
     }
 }

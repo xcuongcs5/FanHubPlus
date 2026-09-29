@@ -26,16 +26,13 @@ class CharacterController extends Controller
 
         $total = CharacterProfile::count();
 
-        // Trả về mock data mẫu theo đặc tả khi DB chưa có bản ghi
+        // Trả về rỗng khi DB chưa có bản ghi
         if ($total === 0) {
             return response()->json([
-                'data' => [
-                    [
-                        'id' => 'chr_xxx',
-                        'name' => 'Naruto Uzumaki',
-                        'category' => 'Anime',
-                        'avatar_url' => 'https://fanhub.com/naruto.jpg',
-                    ],
+                'data' => [],
+                'meta' => [
+                    'total' => 0,
+                    'page' => $page,
                 ],
             ], JsonResponse::HTTP_OK);
         }
@@ -126,12 +123,6 @@ class CharacterController extends Controller
         $character = CharacterProfile::find($id);
 
         if (!$character) {
-            if ($id === 'chr_xxx') {
-                return response()->json([
-                    'message' => 'Cập nhật hồ sơ nhân vật thành công',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy hồ sơ nhân vật.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -182,12 +173,6 @@ class CharacterController extends Controller
         $character = CharacterProfile::find($id);
 
         if (!$character) {
-            if ($id === 'chr_xxx') {
-                return response()->json([
-                    'message' => 'Đã xóa hồ sơ nhân vật',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy hồ sơ nhân vật.',
             ], JsonResponse::HTTP_NOT_FOUND);

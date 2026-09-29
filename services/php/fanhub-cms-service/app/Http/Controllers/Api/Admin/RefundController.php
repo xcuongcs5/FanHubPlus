@@ -59,12 +59,6 @@ class RefundController extends Controller
         $refund = PaymentRefund::find($id);
 
         if (!$refund) {
-            if ($id === 'ref_xxx') {
-                return response()->json([
-                    'message' => 'Lệnh hoàn tiền đã được xử lý thành công',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy yêu cầu hoàn tiền.',
             ], JsonResponse::HTTP_NOT_FOUND);

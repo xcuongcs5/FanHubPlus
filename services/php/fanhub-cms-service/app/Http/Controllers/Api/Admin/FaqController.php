@@ -90,12 +90,6 @@ class FaqController extends Controller
         $faq = Faq::find($id);
 
         if (!$faq) {
-            if ($id === 'faq_xxx') {
-                return response()->json([
-                    'message' => 'Cập nhật câu hỏi FAQ thành công',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy câu hỏi FAQ.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -131,12 +125,6 @@ class FaqController extends Controller
         $faq = Faq::find($id);
 
         if (!$faq) {
-            if ($id === 'faq_xxx') {
-                return response()->json([
-                    'message' => 'Đã xóa câu hỏi khỏi kho tri thức',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy câu hỏi FAQ.',
             ], JsonResponse::HTTP_NOT_FOUND);
