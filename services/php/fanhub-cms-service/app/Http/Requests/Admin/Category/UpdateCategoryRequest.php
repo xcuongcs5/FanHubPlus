@@ -25,8 +25,6 @@ class UpdateCategoryRequest extends FormRequest
             'parent_id' => [
                 'nullable',
                 'string',
-                'different:id',
-                'exists:categories,id',
                 function ($attribute, $value, $fail) use ($id) {
                     if ($value && $value === $id) {
                         $fail('Danh mục cha không thể là chính nó.');
@@ -37,7 +35,6 @@ class UpdateCategoryRequest extends FormRequest
                 'nullable',
                 'string',
                 'max:255',
-                Rule::unique('categories', 'slug')->ignore($id, 'id'),
             ],
         ];
     }

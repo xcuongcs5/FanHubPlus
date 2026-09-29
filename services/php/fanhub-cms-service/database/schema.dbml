@@ -1,0 +1,642 @@
+// ==========================================
+// FANHUB PLUS - COMPLETE DATABASE SCHEMA (DBML)
+// For https://dbdiagram.io
+// ==========================================
+
+Project FanHubPlus {
+  database_type: 'SQL Server & MySQL'
+  Note: 'Microservices Database Architecture with Database-per-Service & EDA Projections'
+}
+
+// ==========================================
+// 1. IDENTITY SERVICE (fanhub_identity)
+// ==========================================
+Table users {
+  id uuid [pk]
+  email varchar(255) [unique, not null]
+  password_hash varchar(500) [not null]
+  full_name nvarchar(200) [not null]
+  avatar_url nvarchar(500)
+  phone_number varchar(20)
+  status varchar(20) [default: 'Active']
+  is_deleted boolean [default: false]
+  created_at datetime
+  updated_at datetime
+
+  Note: 'Identity Service - Central User Accounts'
+}
+
+Table roles {
+  id uuid [pk]
+  name varchar(50) [unique, not null]
+  description nvarchar(200)
+  created_at datetime
+
+  Note: 'RBAC Roles: Admin, User, Moderator, EventOwner'
+}
+
+Table user_roles {
+  user_id uuid [ref: > users.id]
+  role_id uuid [ref: > roles.id]
+
+  indexes {
+    (user_id, role_id) [pk]
+  }
+}
+
+Table user_preferences {
+  id uuid [pk]
+  user_id uuid [unique, ref: - users.id]
+  theme varchar(20) [default: 'light']
+  language varchar(10) [default: 'vi']
+}
+
+Table refresh_tokens {
+  id uuid [pk]
+  user_id uuid [ref: > users.id]
+  token varchar(500) [unique, not null]
+  expires_at datetime [not null]
+  is_revoked boolean [default: false]
+  created_at datetime
+}
+
+// ==========================================
+// 2. EVENT SERVICE (fanhub_event)
+// ==========================================
+Table locations {
+  location_id uuid [pk]
+  name nvarchar(200) [not null]
+  address nvarchar(500) [not null]
+  latitude decimal(9,6) [not null]
+  longitude decimal(9,6) [not null]
+  created_at datetime2
+}
+
+Table events {
+  event_id uuid [pk]
+  organizer_id uuid [not null, note: 'Logical ref to users.id']
+  location_id uuid [ref: > locations.location_id]
+  title nvarchar(250) [not null]
+  description nvarchar(max) [not null]
+  banner_url nvarchar(2048)
+  start_time datetime2 [not null]
+  end_time datetime2 [not null]
+  capacity int [not null]
+  status varchar(20) [default: 'Draft', note: 'Draft, PendingReview, Approved, Rejected, Published, Cancelled, Completed']
+  is_featured bit [default: 0]
+  published_at datetime2
+  cancelled_at datetime2
+  cancellation_reason nvarchar(1000)
+  created_at datetime2
+  updated_at datetime2
+  version rowversion
+}
+
+Table category_projections {
+  category_id uuid [pk]
+  parent_id uuid
+  name nvarchar(200) [not null]
+  is_deleted bit [default: 0]
+  source_version bigint
+  synced_at datetime2
+}
+
+Table event_categories {
+  event_id uuid [ref: > events.event_id]
+  category_id uuid [ref: > category_projections.category_id]
+
+  indexes {
+    (event_id, category_id) [pk]
+  }
+}
+
+Table event_staffs {
+  event_id uuid [ref: > events.event_id]
+  user_id uuid [note: 'Logical ref to users.id']
+  role varchar(20) [default: 'CheckIn', note: 'CheckIn, Manager']
+  is_active bit [default: 1]
+  assigned_at datetime2
+
+  indexes {
+    (event_id, user_id) [pk]
+  }
+}
+
+Table event_reviews {
+  review_id uuid [pk]
+  event_id uuid [ref: > events.event_id]
+  reviewer_id uuid
+  source varchar(10) [note: 'AI, Admin']
+  decision varchar(20) [note: 'Approved, Rejected, Flagged']
+  reason nvarchar(2000)
+  created_at datetime2
+}
+
+Table attendee_projections {
+  booking_id uuid [pk]
+  event_id uuid [ref: > events.event_id]
+  user_id uuid
+  status varchar(30)
+  checked_in_at datetime2
+  source_version bigint
+}
+
+// ==========================================
+// 3. BOOKING SERVICE (fanhub_booking)
+// ==========================================
+Table event_projections_booking {
+  event_id uuid [pk]
+  organizer_id uuid
+  title nvarchar(250)
+  start_time datetime2
+  end_time datetime2
+  capacity int
+  status varchar(20)
+  source_version bigint
+}
+
+Table ticket_types {
+  ticket_type_id uuid [pk]
+  event_id uuid [ref: > event_projections_booking.event_id]
+  name nvarchar(100) [not null]
+  price decimal(19,4) [not null]
+  currency char(3) [default: 'VND']
+  tier_rank int [default: 0]
+  total_quantity int [not null]
+  reserved_quantity int [default: 0]
+  sold_quantity int [default: 0]
+  sale_start datetime2 [not null]
+  sale_end datetime2 [not null]
+  is_active bit [default: 1]
+  version rowversion
+}
+
+Table booking_requests {
+  request_id uuid [pk]
+  user_id uuid [not null]
+  idempotency_key varchar(100) [not null]
+  request_hash binary(32) [not null]
+  event_id uuid [not null]
+  ticket_type_id uuid [ref: > ticket_types.ticket_type_id]
+  quantity int [not null]
+  status varchar(20) [default: 'Pending', note: 'Pending, Processing, Completed, Failed, Expired']
+  failure_code varchar(100)
+  created_at datetime2
+  completed_at datetime2
+  version rowversion
+}
+
+Table ticket_bookings {
+  booking_id uuid [pk]
+  request_id uuid [ref: > booking_requests.request_id]
+  ticket_number int [not null]
+  event_id uuid [not null]
+  ticket_type_id uuid [ref: > ticket_types.ticket_type_id]
+  purchaser_id uuid [not null]
+  user_id uuid [not null, note: 'Current Ticket Owner']
+  unit_price decimal(19,4) [not null]
+  currency char(3) [default: 'VND']
+  status varchar(30) [default: 'Reserved', note: 'Reserved, PaymentPending, Paid, MintPending, Active, TransferPending, UpgradePending, CheckedIn, Cancelled, Expired, Refunded']
+  expires_at datetime2 [not null]
+  nft_token_id varchar(200) [unique]
+  blockchain_tx_hash varchar(100)
+  created_at datetime2
+  paid_at datetime2
+  cancelled_at datetime2
+  checked_in_at datetime2
+  version rowversion
+}
+
+Table ticket_transfers {
+  transfer_id uuid [pk]
+  booking_id uuid [ref: > ticket_bookings.booking_id]
+  from_user_id uuid [not null]
+  to_user_id uuid [not null]
+  idempotency_key varchar(100) [not null]
+  status varchar(20) [default: 'Pending', note: 'Pending, Completed, Failed']
+  blockchain_tx_hash varchar(100)
+  created_at datetime2
+  completed_at datetime2
+}
+
+Table ticket_upgrades {
+  upgrade_id uuid [pk]
+  booking_id uuid [ref: > ticket_bookings.booking_id]
+  event_id uuid [not null]
+  from_ticket_type_id uuid [ref: > ticket_types.ticket_type_id]
+  to_ticket_type_id uuid [ref: > ticket_types.ticket_type_id]
+  price_difference decimal(19,4) [not null]
+  currency char(3) [default: 'VND']
+  idempotency_key varchar(100) [not null]
+  status varchar(20) [default: 'Pending']
+  created_at datetime2
+  completed_at datetime2
+}
+
+Table ticket_check_ins {
+  check_in_id uuid [pk]
+  booking_id uuid [ref: > ticket_bookings.booking_id]
+  event_id uuid [not null]
+  staff_user_id uuid [not null]
+  gate_id varchar(50)
+  scanned_at datetime2
+  validation_hash varchar(64)
+}
+
+// ==========================================
+// 4. MERCHANDISE & STORE SERVICE (fanhub_merchandise)
+// ==========================================
+Table merchandises {
+  id uuid [pk]
+  category_id uuid [ref: > category_projections.category_id]
+  name nvarchar(255) [not null]
+  price decimal(19,4) [not null]
+  tag varchar(100) [note: 'Figure, Clothes, Keychain, Poster, Special']
+  image_url nvarchar(500)
+  description nvarchar(max)
+  stock_quantity int [default: 0]
+  sold_quantity int [default: 0]
+  status varchar(20) [default: 'Active', note: 'Active, OutOfStock, Discontinued']
+  created_at datetime2
+  updated_at datetime2
+
+  Note: 'Merchandise Showcase & Fan Goods Catalog'
+}
+
+Table merchandise_orders {
+  order_id uuid [pk]
+  user_id uuid [not null, note: 'Logical ref to users.id']
+  total_amount decimal(19,4) [not null]
+  currency char(3) [default: 'VND']
+  shipping_address nvarchar(500) [not null]
+  phone_number varchar(20) [not null]
+  status varchar(20) [default: 'Pending', note: 'Pending, Paid, Processing, Shipped, Delivered, Cancelled']
+  created_at datetime2
+  completed_at datetime2
+}
+
+Table merchandise_order_items {
+  id uuid [pk]
+  order_id uuid [ref: > merchandise_orders.order_id]
+  merchandise_id uuid [ref: > merchandises.id]
+  quantity int [not null, default: 1]
+  unit_price decimal(19,4) [not null]
+
+  indexes {
+    (order_id, merchandise_id) [unique]
+  }
+}
+
+// ==========================================
+// 5. PAYMENT & WALLET SERVICE (fanhub_payment)
+// ==========================================
+Table booking_projections_payment {
+  booking_id uuid [pk]
+  user_id uuid [not null]
+  event_id uuid [not null]
+  amount decimal(19,4) [not null]
+  currency char(3) [not null]
+  status varchar(30) [not null]
+  expires_at datetime2 [not null]
+  source_version bigint
+}
+
+Table wallets {
+  wallet_id uuid [pk]
+  user_id uuid [unique, not null]
+  currency char(3) [default: 'VND']
+  balance decimal(19,4) [default: 0]
+  status varchar(10) [default: 'Active', note: 'Active, Frozen, Closed']
+  created_at datetime2
+  updated_at datetime2
+  version rowversion
+}
+
+Table payment_transactions {
+  transaction_id uuid [pk]
+  user_id uuid [not null]
+  booking_id uuid [ref: > booking_projections_payment.booking_id]
+  merchandise_order_id uuid [ref: > merchandise_orders.order_id]
+  wallet_id uuid [ref: > wallets.wallet_id]
+  upgrade_id uuid
+  purpose varchar(20) [not null, note: 'Booking, Upgrade, Deposit, Merchandise']
+  provider varchar(10) [not null, note: 'VNPay, MoMo, Wallet']
+  merchant_reference varchar(100) [unique, not null]
+  provider_transaction_id varchar(150)
+  idempotency_key varchar(100) [not null]
+  request_hash binary(32) [not null]
+  amount decimal(19,4) [not null]
+  currency char(3) [default: 'VND']
+  status varchar(20) [default: 'Pending', note: 'Pending, Processing, Succeeded, Failed, Expired, Cancelled']
+  checkout_url nvarchar(2048)
+  expires_at datetime2 [not null]
+  created_at datetime2
+  completed_at datetime2
+  version rowversion
+}
+
+Table wallet_ledgers {
+  ledger_id bigint [pk, increment]
+  wallet_id uuid [ref: > wallets.wallet_id]
+  transaction_id uuid [ref: > payment_transactions.transaction_id]
+  refund_id uuid [ref: > payment_refunds.refund_id]
+  entry_type varchar(10) [not null, note: 'Deposit, Payment, Refund']
+  amount decimal(19,4) [not null]
+  balance_after decimal(19,4) [not null]
+  created_at datetime2 [not null]
+
+  Note: 'Append-Only Immutable Financial Ledger'
+}
+
+Table payment_webhooks {
+  webhook_id uuid [pk]
+  provider varchar(10) [not null, note: 'VNPay, MoMo']
+  provider_event_key varchar(200) [unique, not null]
+  transaction_id uuid [ref: > payment_transactions.transaction_id]
+  payload_hash binary(32) [not null]
+  status varchar(20) [default: 'Received', note: 'Received, Processed, Rejected, Failed']
+  failure_reason nvarchar(1000)
+  received_at datetime2
+  processed_at datetime2
+}
+
+Table payment_refunds {
+  refund_id uuid [pk]
+  transaction_id uuid [ref: > payment_transactions.transaction_id]
+  requested_by uuid [not null]
+  idempotency_key varchar(100) [not null]
+  amount decimal(19,4) [not null]
+  reason nvarchar(1000) [not null]
+  provider_refund_id varchar(150)
+  status varchar(20) [default: 'Pending', note: 'Pending, Processing, Succeeded, Failed']
+  created_at datetime2
+  completed_at datetime2
+  version rowversion
+}
+
+// ==========================================
+// 6. NOTIFICATION SERVICE (fanhub_notification)
+// ==========================================
+Table notifications {
+  notification_id uuid [pk]
+  user_id uuid [not null]
+  source_message_id uuid [not null]
+  type varchar(100) [not null]
+  title nvarchar(250) [not null]
+  message nvarchar(4000) [not null]
+  data_json nvarchar(max)
+  read_at datetime2
+  created_at datetime2
+}
+
+Table device_tokens {
+  device_token_id uuid [pk]
+  user_id uuid [not null]
+  provider varchar(10) [not null, note: 'FCM, APNs']
+  device_id varchar(200) [not null]
+  token nvarchar(2048) [not null]
+  is_active bit [default: 1]
+  created_at datetime2
+  last_seen_at datetime2
+}
+
+Table notification_deliveries {
+  delivery_id uuid [pk]
+  notification_id uuid [ref: > notifications.notification_id]
+  device_token_id uuid [ref: > device_tokens.device_token_id]
+  status varchar(20) [default: 'Pending', note: 'Pending, Processing, Sent, Failed, Skipped']
+  attempt_count int [default: 0]
+  next_attempt_at datetime2
+  locked_until datetime2
+  last_error nvarchar(2000)
+  sent_at datetime2
+}
+
+// ==========================================
+// 7. CMS & COMMUNITY SERVICE (fanhub_cms - MySQL)
+// ==========================================
+Table cms_categories {
+  id uuid [pk]
+  parent_id uuid [ref: > cms_categories.id]
+  name varchar(255) [not null]
+  slug varchar(255) [unique, not null]
+  description text
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table cms_fandom_groups {
+  id varchar(64) [pk]
+  name varchar(255) [not null]
+  description text
+  status varchar(50) [default: 'active']
+  created_by varchar(64) [not null]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table cms_fandom_group_members {
+  id varchar(64) [pk]
+  group_id varchar(64) [ref: > cms_fandom_groups.id]
+  user_id varchar(64) [not null]
+  role varchar(50) [default: 'member']
+  status varchar(50) [default: 'active']
+  joined_at timestamp
+
+  indexes {
+    (group_id, user_id) [unique]
+  }
+}
+
+Table cms_contents {
+  id varchar(64) [pk]
+  user_id varchar(64) [not null]
+  category_id uuid [ref: > cms_categories.id]
+  group_id varchar(64) [ref: > cms_fandom_groups.id]
+  title varchar(255)
+  body text [not null]
+  status varchar(50) [default: 'active']
+  likes_count unsigned_int [default: 0]
+  comments_count unsigned_int [default: 0]
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table cms_media_assets {
+  id varchar(64) [pk]
+  content_id varchar(64) [ref: > cms_contents.id]
+  file_url varchar(500) [not null]
+  file_type varchar(20) [note: 'Image, Video, Audio, Thumbnail']
+  sort_order int [default: 0]
+  created_at timestamp
+}
+
+Table cms_character_profiles {
+  id varchar(64) [pk]
+  category_id uuid [ref: > cms_categories.id]
+  name varchar(255) [not null]
+  biography text
+  avatar_url varchar(500)
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table cms_tags {
+  id varchar(64) [pk]
+  name varchar(255) [unique, not null]
+}
+
+Table cms_content_tags {
+  content_id varchar(64) [ref: > cms_contents.id]
+  tag_id varchar(64) [ref: > cms_tags.id]
+
+  indexes {
+    (content_id, tag_id) [pk]
+  }
+}
+
+Table cms_comments {
+  id varchar(64) [pk]
+  target_id varchar(64) [ref: > cms_contents.id]
+  user_id varchar(64) [not null]
+  parent_id varchar(64) [ref: > cms_comments.id]
+  title varchar(255)
+  body text [not null]
+  status varchar(50) [default: 'active']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table cms_reaction_bookmarks {
+  id varchar(64) [pk]
+  user_id varchar(64) [not null]
+  target_type varchar(50) [not null, note: 'CONTENT, COMMENT, MERCHANDISE, EVENT']
+  target_id varchar(64) [not null]
+  action_type varchar(50) [not null, note: 'LIKE, BOOKMARK, HEART, HAHA']
+  created_at timestamp
+
+  indexes {
+    (user_id, target_type, target_id, action_type) [unique]
+  }
+}
+
+Table cms_financial_reports {
+  id varchar(64) [pk]
+  title varchar(255)
+  description text
+  revenue decimal(15,2) [default: 0]
+  status varchar(50) [default: 'active']
+  created_at timestamp
+  updated_at timestamp
+}
+
+// ==========================================
+// 8. COMMON TECHNICAL TABLES (EDA Outbox/Inbox)
+// ==========================================
+Table user_projections_common {
+  user_id uuid [pk]
+  full_name nvarchar(200) [not null]
+  avatar_url nvarchar(500)
+  status varchar(20) [default: 'Active']
+  source_updated_at datetime2
+  synced_at datetime2
+}
+
+Table outbox_messages {
+  message_id uuid [pk]
+  event_type varchar(200) [not null]
+  schema_version int [default: 1]
+  aggregate_id uuid [not null]
+  aggregate_version bigint [not null]
+  correlation_id uuid
+  payload nvarchar(max) [not null]
+  occurred_at datetime2 [not null]
+  published_at datetime2
+  attempt_count int [default: 0]
+  next_attempt_at datetime2
+  locked_until datetime2
+  lock_id uuid
+  last_error nvarchar(2000)
+}
+
+Table inbox_messages {
+  consumer varchar(150) [not null]
+  message_id uuid [not null]
+  processed_at datetime2 [not null]
+
+  indexes {
+    (consumer, message_id) [pk]
+  }
+}
+
+// ==========================================
+// TABLE GROUPS FOR EASY VISUALIZATION
+// ==========================================
+TableGroup Identity_Service {
+  users
+  roles
+  user_roles
+  user_preferences
+  refresh_tokens
+}
+
+TableGroup Event_Service {
+  locations
+  events
+  category_projections
+  event_categories
+  event_staffs
+  event_reviews
+  attendee_projections
+}
+
+TableGroup Booking_Service {
+  event_projections_booking
+  ticket_types
+  booking_requests
+  ticket_bookings
+  ticket_transfers
+  ticket_upgrades
+  ticket_check_ins
+}
+
+TableGroup Merchandise_Service {
+  merchandises
+  merchandise_orders
+  merchandise_order_items
+}
+
+TableGroup Payment_Service {
+  booking_projections_payment
+  wallets
+  payment_transactions
+  wallet_ledgers
+  payment_webhooks
+  payment_refunds
+}
+
+TableGroup Notification_Service {
+  notifications
+  device_tokens
+  notification_deliveries
+}
+
+TableGroup Community_CMS {
+  cms_categories
+  cms_fandom_groups
+  cms_fandom_group_members
+  cms_contents
+  cms_media_assets
+  cms_character_profiles
+  cms_tags
+  cms_content_tags
+  cms_comments
+  cms_reaction_bookmarks
+  cms_financial_reports
+}
+
+TableGroup Messaging_EDA {
+  user_projections_common
+  outbox_messages
+  inbox_messages
+}

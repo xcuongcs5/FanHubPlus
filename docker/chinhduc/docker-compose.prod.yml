@@ -1,0 +1,422 @@
+name: fanhub-chinhduc
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  # ==========================================
+  # 1. HẠ TẦNG CƠ SỞ DỮ LIỆU & BROKER
+  # ==========================================
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fanhub-sqlserver
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+    ports:
+      - '127.0.0.1:${SQL_PORT:-14334}:1433'
+    volumes:
+      - sql_data:/var/opt/mssql
+    healthcheck:
+      test: ['CMD-SHELL', 'SQLCMDPASSWORD="$$MSSQL_SA_PASSWORD" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -Q "SELECT 1" -o /dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    logging: *default-logging
+
+  db-migrate:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: fanhub-db-migrate
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      SQL_SERVER: sqlserver
+      SQLCMDPASSWORD: ${MSSQL_SA_PASSWORD}
+      EVENT_DB_PASSWORD: ${EVENT_DB_PASSWORD}
+      BOOKING_DB_PASSWORD: ${BOOKING_DB_PASSWORD}
+      PAYMENT_DB_PASSWORD: ${PAYMENT_DB_PASSWORD}
+      NOTIFICATION_DB_PASSWORD: ${NOTIFICATION_DB_PASSWORD}
+    volumes:
+      - ../../database:/database:ro
+      - ./scripts:/scripts:ro
+    entrypoint: ['/bin/bash', '/scripts/migrate.sh']
+    restart: 'no'
+    logging: *default-logging
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: fanhub-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: fanhub
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: fanhub
+    ports:
+      - '127.0.0.1:${RABBITMQ_PORT:-5673}:5672'
+      - '127.0.0.1:${RABBITMQ_MANAGEMENT_PORT:-15673}:15672'
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine
+    container_name: fanhub-redis
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ['/bin/sh', '-c', 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    ports:
+      - '127.0.0.1:${REDIS_PORT:-6381}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    logging: *default-logging
+
+  mongodb-search:
+    image: mongo:6
+    container_name: fanhub-mongodb-search
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: fanhub
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-secret}
+    ports:
+      - '127.0.0.1:${MONGO_PORT:-27017}:27017'
+    volumes:
+      - mongodb_search_data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    logging: *default-logging
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: fanhub-qdrant
+    ports:
+      - '127.0.0.1:6333:6333'
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ==========================================
+  # 2. MICROSERVICES CORE (.NET 10)
+  # ==========================================
+  identity-service:
+    image: fanhub-chinhduc-identity-service:local
+    container_name: fanhub-identity-service
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.IdentityService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__AuthDb: 'Server=sqlserver,1433;Database=fanhub_identity;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true'
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Redis__ConnectionString: 'redis:6379,password=${REDIS_PASSWORD}'
+    ports:
+      - '127.0.0.1:${IDENTITY_HTTP_PORT:-5001}:8080'
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  event-service:
+    image: fanhub-chinhduc-event-service:local
+    container_name: fanhub-event-service
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.EventService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__EventDb: 'Server=sqlserver,1433;Database=fanhub_event;User Id=fanhub_event_app;Password=${EVENT_DB_PASSWORD};Encrypt=True;TrustServerCertificate=True'
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+    ports:
+      - '127.0.0.1:${EVENT_HTTP_PORT:-5004}:8080'
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  booking-service:
+    image: fanhub-chinhduc-booking-service:local
+    container_name: fanhub-booking-service
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.BookingService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__BookingDb: 'Server=sqlserver,1433;Database=fanhub_booking;User Id=fanhub_booking_app;Password=${BOOKING_DB_PASSWORD};Encrypt=True;TrustServerCertificate=True'
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Blockchain__SignerAddress: ${BLOCKCHAIN_SIGNER_ADDRESS:-}
+    ports:
+      - '127.0.0.1:${BOOKING_HTTP_PORT:-5010}:8080'
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  payment-service:
+    image: fanhub-chinhduc-payment-service:local
+    container_name: fanhub-payment-service
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.PaymentWalletService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${PAYMENT_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__PaymentDb: 'Server=sqlserver,1433;Database=fanhub_payment;User Id=fanhub_payment_app;Password=${PAYMENT_DB_PASSWORD};Encrypt=True;TrustServerCertificate=True'
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      ProviderConfigFile: /run/secrets/payment-providers.json
+    volumes:
+      - ../secrets/payment-providers.json:/run/secrets/payment-providers.json:ro
+    ports:
+      - '127.0.0.1:${PAYMENT_HTTP_PORT:-5011}:8080'
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  notification-service:
+    image: fanhub-chinhduc-notification-service:local
+    container_name: fanhub-notification-service
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.NotificationService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${NOTIFICATION_ENVIRONMENT:-Development}
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__NotificationDb: 'Server=sqlserver,1433;Database=fanhub_notification;User Id=fanhub_notification_app;Password=${NOTIFICATION_DB_PASSWORD};Encrypt=True;TrustServerCertificate=True'
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      Firebase__Enabled: ${FIREBASE_ENABLED:-false}
+      Firebase__ProjectId: ${FIREBASE_PROJECT_ID:-}
+    ports:
+      - '127.0.0.1:${NOTIFICATION_HTTP_PORT:-5012}:8080'
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  analytics-service:
+    image: fanhub-chinhduc-analytics-service:local
+    container_name: fanhub-analytics-service
+    build:
+      context: ../..
+      dockerfile: services/dotnet/FanHub.AnalyticsService/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: '8080'
+      ConnectionStrings__AnalyticsDb: 'Server=sqlserver,1433;Database=fanhub_analytics;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True'
+      ConnectionStrings__Redis: 'redis:6379,password=${REDIS_PASSWORD}'
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-FanHub.IdentityService}
+      Jwt__Audience: ${JWT_AUDIENCE:-FanHub.Services}
+      RabbitMq__Host: rabbitmq
+      RabbitMq__Port: '5672'
+      RabbitMq__VirtualHost: fanhub
+      RabbitMq__Username: fanhub
+      RabbitMq__Password: ${RABBITMQ_PASSWORD}
+      RabbitMq__QueuePrefix: fanhub-analytics
+    ports:
+      - '127.0.0.1:${ANALYTICS_HTTP_PORT:-5015}:8080'
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ==========================================
+  # 3. SPECIALIZED SERVICES (NODE.JS & PYTHON)
+  # ==========================================
+  gps-location-service:
+    image: fanhub-chinhduc-gps-location-service:local
+    container_name: fanhub-gps-service
+    build:
+      context: ../../services/nodejs/gps-location-service
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      REDIS_URL: 'redis://redis:6379'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672'
+    ports:
+      - '127.0.0.1:${GPS_HTTP_PORT:-3001}:3001'
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  search-service:
+    image: fanhub-chinhduc-search-service:local
+    container_name: fanhub-search-service
+    build:
+      context: ../../services/nodejs/search-service
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: '3003'
+      MONGO_URI: 'mongodb://fanhub:${MONGO_PASSWORD:-secret}@mongodb-search:27017/fanhub_search?authSource=admin'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672'
+    ports:
+      - '127.0.0.1:${SEARCH_HTTP_PORT:-3003}:3003'
+    depends_on:
+      mongodb-search:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  blockchain-service:
+    image: fanhub-chinhduc-blockchain-service:local
+    container_name: fanhub-blockchain-service
+    build:
+      context: ../../services/nodejs/blockchain-service
+      dockerfile: Dockerfile
+    environment:
+      NODE_ENV: production
+      PORT: '3004'
+      MONGO_URI: 'mongodb://fanhub:${MONGO_PASSWORD:-secret}@mongodb-search:27017/fanhub_blockchain?authSource=admin'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672'
+    ports:
+      - '127.0.0.1:${BLOCKCHAIN_HTTP_PORT:-3004}:3004'
+    depends_on:
+      mongodb-search:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: *default-logging
+
+  chatbot-service:
+    image: fanhub-chinhduc-chatbot-service:local
+    container_name: fanhub-chatbot-service
+    build:
+      context: ../../services/python/chatbot-service
+      dockerfile: Dockerfile
+    environment:
+      PORT: '3005'
+      GEMINI_API_KEY: '${GEMINI_API_KEY}'
+      QDRANT_URL: 'http://qdrant:6333'
+      RABBITMQ_URL: 'amqp://fanhub:${RABBITMQ_PASSWORD}@rabbitmq:5672/fanhub'
+      REDIS_URL: 'redis://redis:6379'
+    ports:
+      - '127.0.0.1:${CHATBOT_HTTP_PORT:-3005}:3005'
+    depends_on:
+      - qdrant
+      - rabbitmq
+      - redis
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ==========================================
+  # 4. API GATEWAY (KONG 3.4 DB-LESS)
+  # ==========================================
+  kong:
+    image: kong:3.4
+    container_name: fanhub-kong-gateway
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: "/usr/local/kong/declarative/kong.yml"
+      KONG_PROXY_ACCESS_LOG: "/dev/stdout"
+      KONG_ADMIN_ACCESS_LOG: "/dev/stdout"
+      KONG_PROXY_ERROR_LOG: "/dev/stderr"
+      KONG_ADMIN_ERROR_LOG: "/dev/stderr"
+      KONG_ADMIN_LISTEN: "0.0.0.0:8001, 0.0.0.0:8444 ssl"
+      KONG_DNS_VALID_TTL: "1"
+      KONG_DNS_STALE_TTL: "1"
+    volumes:
+      - ./kong/kong.yml:/usr/local/kong/declarative/kong.yml:ro
+    ports:
+      - "${KONG_PROXY_PORT:-8080}:8000"
+      - "127.0.0.1:8001:8001"
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes:
+  sql_data:
+  rabbitmq_data:
+  redis_data:
+  mongodb_search_data:
+  qdrant_data:

@@ -20,16 +20,27 @@ class Event extends Model
         'title',
         'description',
         'status',
+        'organizer',
+        'organizer_email',
+        'location',
+        'start_time',
+        'end_time',
+        'admin_note',
+        'ai_risk_score',
+        'ticket_types_json',
     ];
 
     protected static function booted(): void
     {
         static::creating(function (Event $event) {
             if (empty($event->id)) {
-                $event->id = 'req_' . Str::lower(Str::random(12));
+                $event->id = 'evt_' . Str::lower(Str::random(12));
             }
             if (empty($event->status)) {
-                $event->status = 'pending';
+                $event->status = 'Pending';
+            }
+            if (!isset($event->ai_risk_score)) {
+                $event->ai_risk_score = 0.05;
             }
         });
     }

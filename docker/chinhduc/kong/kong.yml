@@ -44,11 +44,53 @@ services:
         strip_path: false
 
   - name: gps-location-service
-    url: http://gps-location-service:3002
+    url: http://gps-location-service:3001
     routes:
       - name: gps-route
         paths:
+          - /api/v1/locations
           - /api/v1/gps
+        strip_path: false
+
+  - name: search-service
+    url: http://search-service:3003
+    routes:
+      - name: search-route
+        paths:
+          - /api/v1/search
+        strip_path: false
+
+  - name: blockchain-service
+    url: http://blockchain-service:3004
+    routes:
+      - name: blockchain-route
+        paths:
+          - /api/v1/blockchain
+        strip_path: false
+
+  - name: chatbot-service
+    url: http://chatbot-service:3005
+    routes:
+      - name: chatbot-route
+        paths:
+          - /api/v1/chatbot
+        strip_path: false
+
+  - name: analytics-service
+    url: http://analytics-service:8080
+    routes:
+      - name: analytics-route
+        paths:
+          - /api/v1/analytics
+          - /api/v1/admin
+        strip_path: false
+
+  - name: media-streaming-service
+    url: http://media-streaming-service:3002
+    routes:
+      - name: media-route
+        paths:
+          - /api/v1/media
         strip_path: false
 
 plugins:

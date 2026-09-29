@@ -26,8 +26,11 @@ Write-Host "`n8. Khoi dong Blockchain Service (Node.js)..."
 Write-Host "`n9. Khoi dong Chatbot Service (Python + Qdrant)..."
 .\docker\chinhduc\Start-ChatbotService.ps1
 
+Write-Host "`n10. Khoi dong Analytics Service (.NET 10 + Real-time Metrics)..."
+.\docker\chinhduc\Start-AnalyticsService.ps1
+
 Write-Host "
-10. Khoi dong Kong API Gateway..."
+11. Khoi dong Kong API Gateway..."
 .\docker\chinhduc\Start-KongGateway.ps1
 
 Write-Host "

@@ -25,6 +25,7 @@ class Comment extends Model
         'title',
         'body',
         'status',
+        'reports_count',
     ];
 
     protected $appends = [
@@ -35,10 +36,13 @@ class Comment extends Model
     {
         static::creating(function (Comment $comment) {
             if (empty($comment->id)) {
-                $comment->id = 'req_' . Str::lower(Str::random(12));
+                $comment->id = 'cmt_' . Str::lower(Str::random(12));
             }
             if (empty($comment->status)) {
                 $comment->status = 'active';
+            }
+            if (!isset($comment->reports_count)) {
+                $comment->reports_count = 0;
             }
         });
     }
@@ -61,6 +65,11 @@ class Comment extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Comment::class, 'parent_id');
+    }
+
+    public function author(): BelongsTo
+    {
+        return $this->belongsTo(UserProjection::class, 'user_id');
     }
 
     public function children(): HasMany
