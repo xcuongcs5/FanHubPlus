@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\MediaAsset;
 use App\Models\Post;
 use App\Models\UserProjection;
@@ -75,11 +76,10 @@ class ContentController extends Controller
             ], JsonResponse::HTTP_OK);
         }
 
-        // Mẫu theo tài liệu đặc tả khi database chưa có dữ liệu
         return response()->json([
             'data' => [],
             'meta' => [
-                'total' => 25,
+                'total' => 0,
                 'page' => $page,
             ],
         ], JsonResponse::HTTP_OK);
@@ -93,70 +93,47 @@ class ContentController extends Controller
     {
         $post = Post::find($id);
 
-        if ($post) {
-            $authorName = 'User B';
-            if ($post->user_id) {
-                if (Schema::hasTable('Users')) {
-                    $user = DB::table('Users')->where('Id', $post->user_id)->first();
-                    $authorName = $user?->FullName ?? $authorName;
-                } elseif (Schema::hasTable('users')) {
-                    $user = DB::table('users')->where('id', $post->user_id)->first();
-                    $authorName = $user?->full_name ?? $authorName;
-                } elseif (Schema::hasTable('users_projection')) {
-                    $user = UserProjection::find($post->user_id);
-                    $authorName = $user?->full_name ?? $authorName;
-                }
-            }
-
-            $media = [];
-            if (Schema::hasTable('cms_media_assets')) {
-                $mediaAssets = MediaAsset::where('content_id', $post->id)->orderBy('sort_order', 'asc')->get();
-                $media = $mediaAssets->map(function (MediaAsset $m) {
-                    return [
-                        'url' => $m->file_url,
-                        'type' => $m->file_type ?? 'Image',
-                    ];
-                })->all();
-            }
-
-            if (empty($media)) {
-                $media = [
-                    [
-                        'url' => 'https://fanhub.com/media/sample.jpg',
-                        'type' => 'Image',
-                    ],
-                ];
-            }
-
+        if (!$post) {
             return response()->json([
-                'id' => $post->id,
-                'title' => $post->title ?? 'Tiêu đề',
-                'body' => $post->body ?? 'Nội dung...',
-                'media' => $media,
-                'author' => [
-                    'id' => $post->user_id ?? 'usr_xxx',
-                    'name' => $authorName,
-                ],
-                'status' => ucfirst(strtolower($post->status ?? 'Pending')),
-            ], JsonResponse::HTTP_OK);
+                'message' => 'Không tìm thấy bài viết.',
+            ], JsonResponse::HTTP_NOT_FOUND);
         }
 
-        // Mẫu theo đặc tả khi bài viết chưa tồn tại trong DB
+        $authorName = 'User';
+        if ($post->user_id) {
+            if (Schema::hasTable('Users')) {
+                $user = DB::table('Users')->where('Id', $post->user_id)->first();
+                $authorName = $user?->FullName ?? $authorName;
+            } elseif (Schema::hasTable('users')) {
+                $user = DB::table('users')->where('id', $post->user_id)->first();
+                $authorName = $user?->full_name ?? $authorName;
+            } elseif (Schema::hasTable('users_projection')) {
+                $user = UserProjection::find($post->user_id);
+                $authorName = $user?->full_name ?? $authorName;
+            }
+        }
+
+        $media = [];
+        if (Schema::hasTable('cms_media_assets')) {
+            $mediaAssets = MediaAsset::where('content_id', $post->id)->orderBy('sort_order', 'asc')->get();
+            $media = $mediaAssets->map(function (MediaAsset $m) {
+                return [
+                    'url' => $m->file_url,
+                    'type' => $m->file_type ?? 'Image',
+                ];
+            })->all();
+        }
+
         return response()->json([
-            'id' => $id,
-            'title' => 'Tiêu đề',
-            'body' => 'Nội dung...',
-            'media' => [
-                [
-                    'url' => 'https://fanhub.com/media/sample.jpg',
-                    'type' => 'Image',
-                ],
-            ],
+            'id' => $post->id,
+            'title' => $post->title ?? '',
+            'body' => $post->body ?? '',
+            'media' => $media,
             'author' => [
-                'id' => 'usr_xxx',
-                'name' => 'User B',
+                'id' => $post->user_id,
+                'name' => $authorName,
             ],
-            'status' => 'Pending',
+            'status' => ucfirst(strtolower($post->status ?? 'Pending')),
         ], JsonResponse::HTTP_OK);
     }
 
@@ -192,14 +169,39 @@ class ContentController extends Controller
         $userId = $request->attributes->get('admin_user_id') ?? 'admin_root';
         $newId = 'cnt_' . Str::lower(Str::random(12));
 
+        $categoryId = $request->input('category_id');
+        if (!empty($categoryId)) {
+            $catExists = Category::where('id', $categoryId)->exists();
+            if (!$catExists) {
+                try {
+                    $catName = ucwords(str_replace(['cat_', '_', '-'], ['', ' ', ' '], $categoryId));
+                    if (empty(trim($catName))) {
+                        $catName = 'General';
+                    }
+                    Category::create([
+                        'id' => $categoryId,
+                        'name' => $catName,
+                        'slug' => Str::slug($categoryId) . '-' . Str::lower(Str::random(4)),
+                    ]);
+                } catch (\Throwable $e) {
+                    $categoryId = null;
+                }
+            }
+        } else {
+            $categoryId = null;
+        }
+
+        $status = $request->input('status', 'Published');
+        $isFeatured = $request->has('is_featured') ? $request->boolean('is_featured') : true;
+
         $post = Post::create([
             'id' => $newId,
             'user_id' => $userId,
             'title' => $request->input('title', 'Thông báo Sự kiện Chung kết Thế Giới'),
             'body' => $request->input('body', 'Nội dung chi tiết...'),
-            'category_id' => $request->input('category_id'),
-            'is_featured' => $request->boolean('is_featured', true),
-            'status' => 'Published',
+            'category_id' => $categoryId,
+            'is_featured' => $isFeatured,
+            'status' => $status,
         ]);
 
         $mediaUrls = $request->input('media_urls', []);
@@ -240,6 +242,37 @@ class ContentController extends Controller
             if ($request->has('is_pinned')) {
                 $data['is_pinned'] = $request->boolean('is_pinned');
             }
+            if ($request->has('is_featured')) {
+                $data['is_featured'] = $request->boolean('is_featured');
+            }
+            if ($request->has('status')) {
+                $data['status'] = $request->input('status');
+            }
+            if ($request->has('category_id')) {
+                $categoryId = $request->input('category_id');
+                if (!empty($categoryId)) {
+                    $catExists = Category::where('id', $categoryId)->exists();
+                    if (!$catExists) {
+                        try {
+                            $catName = ucwords(str_replace(['cat_', '_', '-'], ['', ' ', ' '], $categoryId));
+                            if (empty(trim($catName))) {
+                                $catName = 'General';
+                            }
+                            Category::create([
+                                'id' => $categoryId,
+                                'name' => $catName,
+                                'slug' => Str::slug($categoryId) . '-' . Str::lower(Str::random(4)),
+                            ]);
+                        } catch (\Throwable $e) {
+                            $categoryId = null;
+                        }
+                    }
+                } else {
+                    $categoryId = null;
+                }
+                $data['category_id'] = $categoryId;
+            }
+
             $post->update($data);
         }
 

@@ -242,6 +242,37 @@ class AdminContentApiTest extends TestCase
         ]);
     }
 
+    public function test_can_create_featured_content_with_non_existent_category(): void
+    {
+        $token = $this->generateAdminJwt();
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/admin/contents', [
+                'title' => 'yteetsdsd',
+                'body' => 'hsdhsdh',
+                'category_id' => 'cat_event',
+                'is_featured' => false,
+                'status' => 'Published',
+            ]);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'message' => 'Đăng bài viết Featured/Thông báo thành công',
+            ]);
+
+        $createdId = $response->json('id');
+
+        $this->assertDatabaseHas('contents', [
+            'id' => $createdId,
+            'title' => 'yteetsdsd',
+            'category_id' => 'cat_event',
+        ]);
+
+        $this->assertDatabaseHas('categories', [
+            'id' => 'cat_event',
+        ]);
+    }
+
     public function test_can_update_content(): void
     {
         $token = $this->generateAdminJwt();

@@ -25,17 +25,13 @@ class MerchandiseController extends Controller
 
         $total = Merchandise::count();
 
-        // Trả về dữ liệu mẫu khi cơ sở dữ liệu chưa có bản ghi
+        // Trả về rỗng khi cơ sở dữ liệu chưa có bản ghi
         if ($total === 0) {
             return response()->json([
-                'data' => [
-                    [
-                        'id' => 'mrc_xxx',
-                        'name' => 'Figure Goku Ultra Instinct',
-                        'price' => 1200000,
-                        'category' => 'Anime',
-                        'tag' => 'Limited Edition',
-                    ],
+                'data' => [],
+                'meta' => [
+                    'total' => 0,
+                    'page' => $page,
                 ],
             ], JsonResponse::HTTP_OK);
         }
@@ -126,12 +122,6 @@ class MerchandiseController extends Controller
         $item = Merchandise::find($id);
 
         if (!$item) {
-            if ($id === 'mrc_xxx') {
-                return response()->json([
-                    'message' => 'Cập nhật vật phẩm thành công',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy vật phẩm.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -185,12 +175,6 @@ class MerchandiseController extends Controller
         $item = Merchandise::find($id);
 
         if (!$item) {
-            if ($id === 'mrc_xxx') {
-                return response()->json([
-                    'message' => 'Đã xóa vật phẩm khỏi danh mục',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy vật phẩm.',
             ], JsonResponse::HTTP_NOT_FOUND);

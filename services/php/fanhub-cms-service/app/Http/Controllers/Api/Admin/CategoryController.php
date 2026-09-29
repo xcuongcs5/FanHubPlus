@@ -27,23 +27,10 @@ class CategoryController extends Controller
 
         $totalCategories = Category::count();
 
-        // Nếu DB rỗng, trả về dữ liệu mẫu theo đặc tả
+        // Nếu DB rỗng, trả về mảng rỗng
         if ($totalCategories === 0) {
             return response()->json([
-                'data' => [
-                    [
-                        'id' => 'cat_1',
-                        'name' => 'Gaming',
-                        'slug' => 'gaming',
-                        'children' => [
-                            [
-                                'id' => 'cat_2',
-                                'name' => 'Esports',
-                                'slug' => 'esports',
-                            ],
-                        ],
-                    ],
-                ],
+                'data' => [],
             ], JsonResponse::HTTP_OK);
         }
 
@@ -100,20 +87,6 @@ class CategoryController extends Controller
         $category = Category::find($id);
 
         if (!$category) {
-            // Cho phép xem mock category
-            if ($id === 'cat_xxx' || $id === 'cat_1' || $id === 'cat_2') {
-                return response()->json([
-                    'id' => $id,
-                    'name' => 'Esports',
-                    'slug' => 'esports',
-                    'parent_id' => 'cat_1',
-                    'stats' => [
-                        'events_count' => 12,
-                        'posts_count' => 340,
-                    ],
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy danh mục.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -192,12 +165,6 @@ class CategoryController extends Controller
         $category = Category::find($id);
 
         if (!$category) {
-            if ($id === 'cat_xxx') {
-                return response()->json([
-                    'message' => 'Đã cập nhật danh mục',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy danh mục.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -240,12 +207,6 @@ class CategoryController extends Controller
         $category = Category::find($id);
 
         if (!$category) {
-            if ($id === 'cat_xxx') {
-                return response()->json([
-                    'message' => 'Đã xóa danh mục thành công',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy danh mục.',
             ], JsonResponse::HTTP_NOT_FOUND);

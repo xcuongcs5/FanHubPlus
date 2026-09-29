@@ -121,4 +121,35 @@ class AdminAuditAndSettingApiTest extends TestCase
                 'max_upload_size_mb' => 50,
             ]);
     }
+
+    public function test_admin_mutating_actions_automatically_generate_audit_log(): void
+    {
+        $token = $this->generateAdminJwt();
+
+        $updatePayload = [
+            'maintenance_mode' => true,
+            'platform_commission_fee' => 8.0,
+            'max_upload_size_mb' => 30,
+        ];
+
+        // Perform an admin mutating action (PUT /api/v1/admin/settings)
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson('/api/v1/admin/settings', $updatePayload)
+            ->assertStatus(200);
+
+        // Verify that AuditLog was automatically created
+        $this->assertDatabaseHas('cms_audit_logs', [
+            'action' => 'Update_Settings',
+            'target' => 'api/v1/admin/settings',
+        ]);
+
+        // Query /api/v1/admin/audit-logs and verify it returns the log
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->getJson('/api/v1/admin/audit-logs?action=Update_Settings&page=1&limit=20');
+
+        $response->assertStatus(200);
+        $this->assertCount(1, $response->json('data'));
+        $this->assertEquals('Update_Settings', $response->json('data.0.action'));
+    }
 }
+

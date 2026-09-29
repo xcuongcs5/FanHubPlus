@@ -25,16 +25,10 @@ class TagController extends Controller
 
         $totalTags = Tag::count();
 
-        // Nếu DB chưa có tag nào, trả về mock sample theo đặc tả
+        // Nếu DB chưa có tag nào, trả về rỗng
         if ($totalTags === 0) {
             return response()->json([
-                'data' => [
-                    [
-                        'id' => 'tag_xxx',
-                        'name' => 'MOBA',
-                        'used_count' => 45,
-                    ],
-                ],
+                'data' => [],
             ], JsonResponse::HTTP_OK);
         }
 
@@ -116,13 +110,6 @@ class TagController extends Controller
         $tag = Tag::find($id);
 
         if (!$tag) {
-            // Cho phép xóa mock ID nếu ở chế độ demo/mock
-            if ($id === 'tag_xxx') {
-                return response()->json([
-                    'message' => 'Đã xóa thẻ',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy thẻ.',
             ], JsonResponse::HTTP_NOT_FOUND);

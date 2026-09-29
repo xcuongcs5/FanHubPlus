@@ -40,24 +40,7 @@ class CommentController extends Controller
             $column = ltrim($sort, '-');
             $query->orderBy($column, $direction);
         }
-
-        $total = $query->count();
-
-        // Nếu DB chưa có bình luận flagged nào, trả về mock data mẫu theo đặc tả
-        if ($total === 0) {
-            return response()->json([
-                'data' => [
-                    [
-                        'id' => 'cmt_xxx',
-                        'post_id' => 'cnt_xxx',
-                        'user' => 'Spammer',
-                        'body' => 'Bình luận spam...',
-                        'reports_count' => 5,
-                    ],
-                ],
-            ], JsonResponse::HTTP_OK);
-        }
-
+        
         $comments = $query->offset(($page - 1) * $limit)
             ->limit($limit)
             ->get();
@@ -103,13 +86,6 @@ class CommentController extends Controller
         $comment = Comment::find($id);
 
         if (!$comment) {
-            // Cho phép xóa mock ID nếu đang ở chế độ demo/mock
-            if ($id === 'cmt_xxx') {
-                return response()->json([
-                    'message' => 'Đã xóa bình luận vi phạm',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy bình luận.',
             ], JsonResponse::HTTP_NOT_FOUND);

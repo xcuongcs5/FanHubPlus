@@ -24,20 +24,13 @@ class EventController extends Controller
 
         $totalEvents = Event::count();
 
-        // Nếu database chưa có sự kiện nào, trả về mock sample theo đặc tả
+        // Nếu database chưa có sự kiện nào, trả về rỗng
         if ($totalEvents === 0) {
             return response()->json([
-                'data' => [
-                    [
-                        'id' => 'evt_xxx',
-                        'title' => 'Cosplay Expo 2026',
-                        'organizer' => 'Otaku Club',
-                        'status' => 'Pending',
-                        'start_time' => '2026-11-01',
-                    ],
-                ],
+                'data' => [],
                 'meta' => [
-                    'total' => 12,
+                    'total' => 0,
+                    'page' => $page,
                 ],
             ], JsonResponse::HTTP_OK);
         }
@@ -125,27 +118,6 @@ class EventController extends Controller
         $event = Event::find($id);
 
         if (!$event) {
-            if ($id === 'evt_xxx') {
-                return response()->json([
-                    'id' => 'evt_xxx',
-                    'title' => 'Cosplay Expo 2026',
-                    'organizer' => [
-                        'name' => 'Otaku Club',
-                        'email' => 'contact@club.vn',
-                    ],
-                    'location' => 'SECC Q7',
-                    'ticket_types' => [
-                        [
-                            'name' => 'VIP',
-                            'price' => 500000,
-                            'total' => 200,
-                        ],
-                    ],
-                    'status' => 'Pending',
-                    'ai_risk_score' => 0.05,
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy sự kiện.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -189,25 +161,6 @@ class EventController extends Controller
         $event = Event::find($id);
 
         if (!$event) {
-            if ($id === 'evt_xxx') {
-                return response()->json([
-                    'id' => $id,
-                    'message' => 'Cập nhật sự kiện thành công',
-                    'data' => [
-                        'id' => $id,
-                        'title' => $request->input('title', 'Cosplay Expo 2026'),
-                        'organizer' => $request->input('organizer', [
-                            'name' => 'Otaku Club',
-                            'email' => 'contact@club.vn',
-                        ]),
-                        'location' => $request->input('location', 'SECC Q7'),
-                        'banner_url' => $request->input('banner_url', ''),
-                        'ticket_types' => $request->input('ticket_types', []),
-                        'status' => 'Pending',
-                    ],
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy sự kiện.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -300,12 +253,6 @@ class EventController extends Controller
         $event = Event::find($id);
 
         if (!$event) {
-            if ($id === 'evt_xxx') {
-                return response()->json([
-                    'message' => 'Đã duyệt/từ chối sự kiện thành công',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy sự kiện.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -333,12 +280,6 @@ class EventController extends Controller
         $event = Event::find($id);
 
         if (!$event) {
-            if ($id === 'evt_xxx') {
-                return response()->json([
-                    'message' => 'Đã gỡ sự kiện vi phạm khỏi hệ thống',
-                ], JsonResponse::HTTP_OK);
-            }
-
             return response()->json([
                 'message' => 'Không tìm thấy sự kiện.',
             ], JsonResponse::HTTP_NOT_FOUND);
@@ -375,16 +316,6 @@ class EventController extends Controller
             ];
         });
 
-        if ($data->isEmpty()) {
-            $data = collect([
-                [
-                    'id' => 'evt_001',
-                    'title' => 'Sự kiện chờ duyệt',
-                    'status' => 'pending',
-                ],
-            ]);
-            $total = 1;
-        }
 
         return response()->json([
             'data' => $data,
