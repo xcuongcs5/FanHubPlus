@@ -22,22 +22,6 @@ class FaqController extends Controller
         $page = max((int) $request->query('page', 1), 1);
         $limit = max((int) $request->query('limit', 20), 1);
 
-        $total = Faq::count();
-
-        // Trả về mock data mẫu khi DB chưa có bản ghi
-        if ($total === 0) {
-            return response()->json([
-                'data' => [
-                    [
-                        'id' => 'faq_xxx',
-                        'question' => 'Làm thế nào để lấy vé NFT?',
-                        'answer' => 'Sau khi thanh toán...',
-                        'is_active' => true,
-                    ],
-                ],
-            ], JsonResponse::HTTP_OK);
-        }
-
         $query = Faq::query();
 
         if (!empty($search)) {

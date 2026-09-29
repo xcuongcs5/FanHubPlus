@@ -2,11 +2,13 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\AuditLog;
 use Closure;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\Response;
 
 class AdminJwtMiddleware
@@ -28,7 +30,18 @@ class AdminJwtMiddleware
         if ($gatewayRole) {
             $gwLower = strtolower(trim($gatewayRole));
             if ($gwLower === 'admin' || $gwLower === 'superadmin' || strcasecmp(trim($gatewayRole), self::ADMIN_ROLE_ID) === 0) {
-                return $next($request);
+                $gwUserId = $request->header('X-User-Id') ?? $request->header('x-user-id');
+                $request->attributes->set('admin_user_id', $gwUserId);
+                $gwPayload = [
+                    'name' => $request->header('X-User-Name') ?? 'Admin',
+                    'email' => $request->header('X-User-Email'),
+                    'sub' => $gwUserId,
+                ];
+                $request->attributes->set('jwt_payload', $gwPayload);
+
+                $response = $next($request);
+                $this->recordAuditLog($request, $response, $gwPayload, $gwUserId);
+                return $response;
             }
             return response()->json([
                 'message' => 'Bạn không có quyền quản trị viên.',
@@ -258,7 +271,138 @@ class AdminJwtMiddleware
         $request->attributes->set('jwt_payload', $payload);
         $request->attributes->set('admin_user_id', $userId);
 
-        return $next($request);
+        $response = $next($request);
+
+        // Tự động ghi lại nhật ký hoạt động (Audit Log) cho các thao tác admin
+        $this->recordAuditLog($request, $response, $payload, $userId);
+
+        return $response;
+    }
+
+    /**
+     * Tự động ghi nhận nhật ký thao tác của Admin vào bảng cms_audit_logs
+     */
+    private function recordAuditLog(Request $request, Response $response, ?array $payload, ?string $userId): void
+    {
+        try {
+            $method = strtoupper($request->method());
+
+            // Chỉ ghi log cho các hành động thay đổi dữ liệu (POST, PUT, PATCH, DELETE)
+            if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'])) {
+                return;
+            }
+
+            // Chỉ ghi log khi request thành công (2xx status code)
+            if ($response->getStatusCode() < 200 || $response->getStatusCode() >= 300) {
+                return;
+            }
+
+            // Không ghi log nếu bảng cms_audit_logs chưa tồn tại
+            if (!Schema::hasTable('cms_audit_logs')) {
+                return;
+            }
+
+            // 1. Xác định Actor
+            $actor = 'Admin';
+            if ($payload) {
+                $actor = $payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']
+                    ?? $payload['name']
+                    ?? $payload['full_name']
+                    ?? $payload['username']
+                    ?? $payload['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress']
+                    ?? $payload['email']
+                    ?? 'Admin';
+            } elseif ($request->header('X-User-Name')) {
+                $actor = $request->header('X-User-Name');
+            }
+
+            // 2. Xác định Action & Target
+            $action = $this->resolveAuditAction($request);
+            $target = $this->resolveAuditTarget($request, $response);
+
+            // 3. Ghi vào database
+            AuditLog::create([
+                'actor_id' => $userId,
+                'actor' => $actor,
+                'action' => $action,
+                'target' => $target,
+                'timestamp' => now(),
+                'ip' => $request->ip() ?: '127.0.0.1',
+            ]);
+        } catch (\Throwable $e) {
+            // Không làm gián đoạn response chính
+            \Illuminate\Support\Facades\Log::error('AuditLog Error: ' . $e->getMessage());
+        }
+    }
+
+    private function resolveAuditAction(Request $request): string
+    {
+        $path = trim($request->path(), '/');
+        $method = strtoupper($request->method());
+
+        if (str_contains($path, 'ban')) {
+            return 'Ban_User';
+        }
+        if (str_contains($path, 'approve')) {
+            return 'Approve_Event';
+        }
+        if (str_contains($path, 'review')) {
+            if (str_contains($path, 'events')) return 'Review_Event';
+            if (str_contains($path, 'contents')) return 'Review_Content';
+            return 'Review_Item';
+        }
+        if (str_contains($path, 'roles')) {
+            return 'Update_User_Roles';
+        }
+        if (str_contains($path, 'status')) {
+            if (str_contains($path, 'users')) return 'Update_User_Status';
+            if (str_contains($path, 'feedbacks')) return 'Update_Feedback_Status';
+            return 'Update_Status';
+        }
+        if (str_contains($path, 'refunds') && str_contains($path, 'process')) {
+            return 'Process_Refund';
+        }
+        if (str_contains($path, 'settings')) {
+            return 'Update_Settings';
+        }
+
+        // Tự động suy diễn từ resource URL
+        $segments = explode('/', $path);
+        $adminIdx = array_search('admin', $segments);
+        $resource = ($adminIdx !== false && isset($segments[$adminIdx + 1])) ? $segments[$adminIdx + 1] : 'Resource';
+
+        $singular = Str::singular(Str::studly($resource));
+
+        return match ($method) {
+            'POST' => "Create_{$singular}",
+            'PUT', 'PATCH' => "Update_{$singular}",
+            'DELETE' => "Delete_{$singular}",
+            default => "{$method}_{$singular}",
+        };
+    }
+
+    private function resolveAuditTarget(Request $request, Response $response): string
+    {
+        $routeId = $request->route('id');
+        if ($routeId) {
+            return (string) $routeId;
+        }
+
+        if ($response instanceof JsonResponse) {
+            $data = $response->getData(true);
+            if (!empty($data['id'])) {
+                return (string) $data['id'];
+            }
+            if (!empty($data['data']['id'])) {
+                return (string) $data['data']['id'];
+            }
+        }
+
+        if ($request->filled('id')) {
+            return (string) $request->input('id');
+        }
+
+        return $request->path();
     }
 
     private function base64UrlDecode(string $input): string|false

@@ -23,24 +23,6 @@ class AuditLogController extends Controller
         $page = max((int) $request->query('page', 1), 1);
         $limit = max((int) $request->query('limit', 20), 1);
 
-        $total = AuditLog::count();
-
-        // Trả về mock data mẫu khi DB chưa có bản ghi
-        if ($total === 0) {
-            return response()->json([
-                'data' => [
-                    [
-                        'id' => 'log_xxx',
-                        'actor' => 'Admin Van Gioi',
-                        'action' => $action ?? 'Ban_User',
-                        'target' => 'usr_xxx',
-                        'timestamp' => '2026-09-27T08:00:00Z',
-                        'ip' => '14.161.x.x',
-                    ],
-                ],
-            ], JsonResponse::HTTP_OK);
-        }
-
         $query = AuditLog::query();
 
         if (!empty($actorId)) {
@@ -52,13 +34,16 @@ class AuditLogController extends Controller
         }
 
         if (!empty($from)) {
-            $query->where('timestamp', '>=', $from);
+            $fromStr = strlen($from) === 10 ? $from . ' 00:00:00' : $from;
+            $query->where('timestamp', '>=', $fromStr);
         }
 
         if (!empty($to)) {
-            $query->where('timestamp', '<=', $to);
+            $toStr = strlen($to) === 10 ? $to . ' 23:59:59' : $to;
+            $query->where('timestamp', '<=', $toStr);
         }
 
+        $total = $query->count();
         $logs = $query->orderBy('timestamp', 'desc')
             ->offset(($page - 1) * $limit)
             ->limit($limit)
@@ -77,6 +62,11 @@ class AuditLogController extends Controller
 
         return response()->json([
             'data' => $data,
+            'meta' => [
+                'total' => $total,
+                'page' => $page,
+                'limit' => $limit,
+            ],
         ], JsonResponse::HTTP_OK);
     }
 }

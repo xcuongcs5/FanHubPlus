@@ -34,7 +34,7 @@ class AdminAuditAndSettingApiTest extends TestCase
         $response->assertStatus(401);
     }
 
-    public function test_get_audit_logs_mock_when_empty(): void
+    public function test_get_audit_logs_empty_when_no_records(): void
     {
         $token = $this->generateAdminJwt();
 
@@ -43,16 +43,7 @@ class AdminAuditAndSettingApiTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJson([
-                'data' => [
-                    [
-                        'id' => 'log_xxx',
-                        'actor' => 'Admin Van Gioi',
-                        'action' => 'Ban_User',
-                        'target' => 'usr_xxx',
-                        'timestamp' => '2026-09-27T08:00:00Z',
-                        'ip' => '14.161.x.x',
-                    ],
-                ],
+                'data' => [],
             ]);
     }
 

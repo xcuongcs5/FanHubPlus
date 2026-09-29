@@ -21,24 +21,6 @@ class FeedbackController extends Controller
         $page = max((int) $request->query('page', 1), 1);
         $limit = max((int) $request->query('limit', 20), 1);
 
-        $total = Feedback::count();
-
-        // Trả về mock data mẫu khi DB chưa có bản ghi
-        if ($total === 0) {
-            return response()->json([
-                'data' => [
-                    [
-                        'id' => 'fb_xxx',
-                        'user' => 'User C',
-                        'type' => $type ?? 'bug',
-                        'title' => 'Lỗi thanh toán MoMo',
-                        'status' => $status ?? 'Open',
-                        'created_at' => '2026-09-26',
-                    ],
-                ],
-            ], JsonResponse::HTTP_OK);
-        }
-
         $query = Feedback::query();
 
         if (!empty($type)) {
