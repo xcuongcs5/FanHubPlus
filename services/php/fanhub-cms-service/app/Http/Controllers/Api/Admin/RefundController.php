@@ -20,24 +20,6 @@ class RefundController extends Controller
         $page = max((int) $request->query('page', 1), 1);
         $limit = max((int) $request->query('limit', 20), 1);
 
-        $total = PaymentRefund::count();
-
-        // Trả về dữ liệu mẫu khi cơ sở dữ liệu trống
-        if ($total === 0) {
-            return response()->json([
-                'data' => [
-                    [
-                        'id' => 'ref_xxx',
-                        'booking_id' => 'bk_xxx',
-                        'user' => 'Nguyen Van B',
-                        'amount' => 500000,
-                        'reason' => 'Sự kiện dời ngày',
-                        'status' => $status ?? 'Pending',
-                    ],
-                ],
-            ], JsonResponse::HTTP_OK);
-        }
-
         $query = PaymentRefund::query();
 
         if (!empty($status)) {

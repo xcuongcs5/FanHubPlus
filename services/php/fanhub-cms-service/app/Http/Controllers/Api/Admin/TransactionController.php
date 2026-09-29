@@ -21,25 +21,6 @@ class TransactionController extends Controller
         $page = max((int) $request->query('page', 1), 1);
         $limit = max((int) $request->query('limit', 20), 1);
 
-        $total = PaymentTransaction::count();
-
-        // Trả về mock data mẫu khi DB chưa có bản ghi
-        if ($total === 0) {
-            return response()->json([
-                'data' => [
-                    [
-                        'id' => 'tx_xxx',
-                        'user' => 'Nguyen Van A',
-                        'amount' => 250000,
-                        'provider' => $provider ?? 'VNPay',
-                        'merchant_ref' => 'ORD_12345',
-                        'status' => $status ?? 'Success',
-                        'created_at' => '2026-09-26',
-                    ],
-                ],
-            ], JsonResponse::HTTP_OK);
-        }
-
         $query = PaymentTransaction::query();
 
         if (!empty($provider)) {
