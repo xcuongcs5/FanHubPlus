@@ -77,15 +77,7 @@ class ContentController extends Controller
 
         // Mẫu theo tài liệu đặc tả khi database chưa có dữ liệu
         return response()->json([
-            'data' => [
-                [
-                    'id' => 'cnt_xxx',
-                    'title' => 'Review Anime Mùa Thu',
-                    'author' => 'User B',
-                    'status' => 'Pending',
-                    'created_at' => '2026-09-25',
-                ],
-            ],
+            'data' => [],
             'meta' => [
                 'total' => 25,
                 'page' => $page,
