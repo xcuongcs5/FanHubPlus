@@ -262,4 +262,91 @@ class AdminEventApiTest extends TestCase
             ->getJson('/api/v1/admin/events')
             ->assertStatus(403);
     }
+
+    public function test_can_create_event(): void
+    {
+        $token = $this->generateAdminJwt();
+
+        $payload = [
+            'title' => 'Cosplay Festival 2026',
+            'organizer' => [
+                'name' => 'Otaku Club',
+                'email' => 'contact@club.vn',
+            ],
+            'location' => 'SECC Q7 HCM',
+            'start_time' => '2026-10-15',
+            'description' => 'Lễ hội cosplay thường niên',
+            'ticket_types' => [
+                ['name' => 'Vé tiêu chuẩn', 'price' => 150000, 'total' => 1000],
+                ['name' => 'Vé VIP', 'price' => 500000, 'total' => 100],
+            ],
+        ];
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/admin/events', $payload);
+
+        $response->assertStatus(201)
+            ->assertJson([
+                'message' => 'Tạo sự kiện thành công',
+                'data' => [
+                    'title' => 'Cosplay Festival 2026',
+                    'location' => 'SECC Q7 HCM',
+                    'start_time' => '2026-10-15',
+                    'status' => 'Pending',
+                ],
+            ]);
+
+        $this->assertDatabaseHas('events', [
+            'title' => 'Cosplay Festival 2026',
+            'organizer' => 'Otaku Club',
+            'organizer_email' => 'contact@club.vn',
+        ]);
+    }
+
+    public function test_can_update_event(): void
+    {
+        $token = $this->generateAdminJwt();
+
+        $event = Event::create([
+            'id' => 'evt_update_target',
+            'title' => 'Old Title',
+            'organizer' => 'Old Organizer',
+            'status' => 'Pending',
+        ]);
+
+        $payload = [
+            'title' => 'xin chào',
+            'organizer' => [
+                'name' => 'adsfdsgsd',
+                'email' => '',
+            ],
+            'location' => 'Quận 1',
+            'start_time' => '2026-09-29',
+            'end_time' => '',
+            'banner_url' => '',
+            'description' => 'Mô tả cập nhật',
+            'ticket_types' => [
+                ['name' => 'Standard', 'price' => 150000, 'total' => 500],
+            ],
+        ];
+
+        $response = $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->putJson('/api/v1/admin/events/' . $event->id, $payload);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'message' => 'Cập nhật sự kiện thành công',
+                'data' => [
+                    'id' => $event->id,
+                    'title' => 'xin chào',
+                    'location' => 'Quận 1',
+                    'start_time' => '2026-09-29',
+                ],
+            ]);
+
+        $this->assertEquals('xin chào', $event->fresh()->title);
+        $this->assertEquals('adsfdsgsd', $event->fresh()->organizer);
+    }
 }
+
+

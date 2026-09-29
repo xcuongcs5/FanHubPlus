@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\Event;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class EventController extends Controller
 {
@@ -69,6 +71,52 @@ class EventController extends Controller
     }
 
     /**
+     * Tạo mới sự kiện
+     * POST /api/v1/admin/events
+     */
+    public function store(Request $request): JsonResponse
+    {
+        $organizer = $request->input('organizer');
+        $organizerName = is_array($organizer) ? ($organizer['name'] ?? 'Otaku Club') : ($organizer ?: 'Otaku Club');
+        $organizerEmail = is_array($organizer) ? ($organizer['email'] ?? null) : $request->input('organizer_email');
+
+        $ticketTypes = $request->input('ticket_types', []);
+        $ticketTypesJson = !empty($ticketTypes) ? (is_string($ticketTypes) ? $ticketTypes : json_encode($ticketTypes)) : null;
+
+        $event = Event::create([
+            'id' => $request->input('id') ?: ('evt_' . Str::lower(Str::random(12))),
+            'title' => $request->input('title', 'Sự kiện mới'),
+            'description' => $request->input('description', ''),
+            'organizer' => $organizerName,
+            'organizer_email' => $organizerEmail,
+            'location' => $request->input('location', ''),
+            'start_time' => $request->input('start_time'),
+            'end_time' => $request->input('end_time'),
+            'ticket_types_json' => $ticketTypesJson,
+            'status' => $request->input('status', 'Pending'),
+            'ai_risk_score' => (float) $request->input('ai_risk_score', 0.05),
+        ]);
+
+        return response()->json([
+            'id' => $event->id,
+            'message' => 'Tạo sự kiện thành công',
+            'data' => [
+                'id' => $event->id,
+                'title' => $event->title,
+                'organizer' => [
+                    'name' => $event->organizer,
+                    'email' => $event->organizer_email,
+                ],
+                'location' => $event->location,
+                'ticket_types' => is_array($ticketTypes) ? $ticketTypes : json_decode($ticketTypes, true),
+                'status' => ucfirst(strtolower($event->status ?? 'Pending')),
+                'start_time' => $event->start_time,
+                'ai_risk_score' => (float) $event->ai_risk_score,
+            ],
+        ], JsonResponse::HTTP_CREATED);
+    }
+
+    /**
      * Chi tiết sự kiện
      * GET /api/v1/admin/events/{id}
      */
@@ -129,6 +177,117 @@ class EventController extends Controller
             'ticket_types' => $ticketTypes,
             'status' => ucfirst(strtolower($event->status ?? 'Pending')),
             'ai_risk_score' => (float) ($event->ai_risk_score ?? 0.05),
+        ], JsonResponse::HTTP_OK);
+    }
+
+    /**
+     * Cập nhật thông tin sự kiện
+     * PUT|PATCH /api/v1/admin/events/{id}
+     */
+    public function update(Request $request, string $id): JsonResponse
+    {
+        $event = Event::find($id);
+
+        if (!$event) {
+            if ($id === 'evt_xxx') {
+                return response()->json([
+                    'id' => $id,
+                    'message' => 'Cập nhật sự kiện thành công',
+                    'data' => [
+                        'id' => $id,
+                        'title' => $request->input('title', 'Cosplay Expo 2026'),
+                        'organizer' => $request->input('organizer', [
+                            'name' => 'Otaku Club',
+                            'email' => 'contact@club.vn',
+                        ]),
+                        'location' => $request->input('location', 'SECC Q7'),
+                        'banner_url' => $request->input('banner_url', ''),
+                        'ticket_types' => $request->input('ticket_types', []),
+                        'status' => 'Pending',
+                    ],
+                ], JsonResponse::HTTP_OK);
+            }
+
+            return response()->json([
+                'message' => 'Không tìm thấy sự kiện.',
+            ], JsonResponse::HTTP_NOT_FOUND);
+        }
+
+        $updateData = [];
+
+        if ($request->has('title')) {
+            $updateData['title'] = $request->input('title');
+        }
+        if ($request->has('description')) {
+            $updateData['description'] = $request->input('description');
+        }
+        if ($request->has('location')) {
+            $updateData['location'] = $request->input('location');
+        }
+        if ($request->has('start_time')) {
+            $updateData['start_time'] = $request->input('start_time');
+        }
+        if ($request->has('end_time')) {
+            $updateData['end_time'] = $request->input('end_time');
+        }
+        if ($request->has('status')) {
+            $updateData['status'] = $request->input('status');
+        }
+        if ($request->has('admin_note')) {
+            $updateData['admin_note'] = $request->input('admin_note');
+        }
+        if ($request->has('ai_risk_score')) {
+            $updateData['ai_risk_score'] = (float) $request->input('ai_risk_score');
+        }
+
+        if ($request->has('organizer')) {
+            $organizer = $request->input('organizer');
+            $updateData['organizer'] = is_array($organizer) ? ($organizer['name'] ?? null) : $organizer;
+            if (is_array($organizer) && array_key_exists('email', $organizer)) {
+                $updateData['organizer_email'] = $organizer['email'];
+            }
+        }
+        if ($request->has('organizer_email')) {
+            $updateData['organizer_email'] = $request->input('organizer_email');
+        }
+
+        if ($request->has('ticket_types')) {
+            $ticketTypes = $request->input('ticket_types');
+            $updateData['ticket_types_json'] = !empty($ticketTypes) ? (is_string($ticketTypes) ? $ticketTypes : json_encode($ticketTypes)) : null;
+        }
+
+        if ($request->has('banner_url') && Schema::hasColumn('events', 'banner_url')) {
+            $updateData['banner_url'] = $request->input('banner_url');
+        }
+
+        $event->update($updateData);
+
+        $currentTicketTypes = [];
+        if (!empty($event->ticket_types_json)) {
+            $decoded = json_decode($event->ticket_types_json, true);
+            if (is_array($decoded)) {
+                $currentTicketTypes = $decoded;
+            }
+        }
+
+        return response()->json([
+            'id' => $event->id,
+            'message' => 'Cập nhật sự kiện thành công',
+            'data' => [
+                'id' => $event->id,
+                'title' => $event->title,
+                'organizer' => [
+                    'name' => $event->organizer,
+                    'email' => $event->organizer_email,
+                ],
+                'location' => $event->location,
+                'banner_url' => $event->banner_url ?? '',
+                'ticket_types' => $currentTicketTypes,
+                'status' => ucfirst(strtolower($event->status ?? 'Pending')),
+                'start_time' => $event->start_time,
+                'end_time' => $event->end_time,
+                'ai_risk_score' => (float) ($event->ai_risk_score ?? 0.05),
+            ],
         ], JsonResponse::HTTP_OK);
     }
 

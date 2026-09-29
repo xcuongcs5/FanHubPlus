@@ -88,9 +88,11 @@ Route::prefix('v1/admin')->middleware(['admin.jwt'])->group(function () {
 
     // Events Management
     Route::get('events', [EventController::class, 'index']);
+    Route::post('events', [EventController::class, 'store']);
     Route::get('events/pending', [EventController::class, 'pending']);
     Route::post('events/{id}/approve', [EventController::class, 'approve']);
     Route::get('events/{id}', [EventController::class, 'show']);
+    Route::match(['put', 'patch'], 'events/{id}', [EventController::class, 'update']);
     Route::put('events/{id}/review', [EventController::class, 'review']);
     Route::delete('events/{id}', [EventController::class, 'destroy']);
 

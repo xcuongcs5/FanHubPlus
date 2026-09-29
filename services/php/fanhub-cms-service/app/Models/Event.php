@@ -28,6 +28,7 @@ class Event extends Model
         'admin_note',
         'ai_risk_score',
         'ticket_types_json',
+        'banner_url',
     ];
 
     protected static function booted(): void
